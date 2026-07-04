@@ -1,3 +1,110 @@
+import dns from 'dns/promises';
+import net from 'net';
+
+const MAX_REDIRECTS = 5;
+const FETCH_TIMEOUT_MS = 12000;
+const MAX_BYTES = 800000;
+
+// Blocks loopback, private, link-local, and other non-public ranges for both IPv4 and IPv6.
+function isBlockedIp(ip) {
+  const type = net.isIP(ip);
+  if (type === 4) {
+    return (
+      /^127\./.test(ip) ||
+      /^10\./.test(ip) ||
+      /^192\.168\./.test(ip) ||
+      /^169\.254\./.test(ip) || // includes cloud metadata (169.254.169.254)
+      /^172\.(1[6-9]|2\d|3[0-1])\./.test(ip) ||
+      ip === '0.0.0.0'
+    );
+  }
+  if (type === 6) {
+    const lower = ip.toLowerCase();
+    return (
+      lower === '::1' ||
+      lower === '::' ||
+      lower.startsWith('fe80:') ||       // link-local
+      lower.startsWith('fc') ||          // unique local fc00::/7
+      lower.startsWith('fd') ||
+      lower.startsWith('::ffff:127.') || // IPv4-mapped loopback
+      lower.startsWith('::ffff:169.254.')
+    );
+  }
+  return true; // couldn't parse -> block to be safe
+}
+
+function isBlockedHostname(host) {
+  const h = host.toLowerCase();
+  return h === 'localhost' || h.endsWith('.local') || h.endsWith('.internal');
+}
+
+// Resolves a hostname and checks EVERY returned address (A + AAAA) is public.
+async function assertHostIsSafe(hostname) {
+  if (isBlockedHostname(hostname)) {
+    throw new Error('Blocked host');
+  }
+  // If it's already a literal IP, validate directly.
+  if (net.isIP(hostname)) {
+    if (isBlockedIp(hostname)) throw new Error('Blocked host');
+    return;
+  }
+  const records = await dns.lookup(hostname, { all: true, verbatim: true });
+  if (!records.length) throw new Error('Could not resolve host');
+  for (const rec of records) {
+    if (isBlockedIp(rec.address)) throw new Error('Blocked host');
+  }
+}
+
+// Follows redirects manually, re-validating the target host at every hop.
+// This closes the gap where redirect: 'follow' would fetch an internal URL
+// after the initial hostname check already passed.
+async function safeFetch(startUrl) {
+  let currentUrl = startUrl;
+
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    const u = new URL(currentUrl);
+    if (!/^https?:$/.test(u.protocol)) {
+      throw new Error('Unsupported protocol');
+    }
+    await assertHostIsSafe(u.hostname);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+    let response;
+    try {
+      response = await fetch(currentUrl, {
+        signal: controller.signal,
+        redirect: 'manual', // we handle redirects ourselves so each hop gets validated
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Accept':
+            'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Cache-Control': 'no-cache',
+          'Referer': u.origin + '/',
+          'Upgrade-Insecure-Requests': '1'
+        }
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const isRedirect = response.status >= 300 && response.status < 400;
+    if (isRedirect) {
+      const location = response.headers.get('location');
+      if (!location) throw new Error('Redirect with no location');
+      currentUrl = new URL(location, currentUrl).toString();
+      continue; // loop back and validate the NEW host before following it
+    }
+
+    return response;
+  }
+
+  throw new Error('Too many redirects');
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -8,48 +115,15 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'A valid http(s) url is required' });
   }
 
-  // Basic SSRF guard: block obvious internal/loopback hosts
   try {
-    const u = new URL(target);
-    const host = u.hostname.toLowerCase();
-    if (
-      host === 'localhost' ||
-      host === '0.0.0.0' ||
-      host.endsWith('.local') ||
-      /^127\./.test(host) ||
-      /^10\./.test(host) ||
-      /^192\.168\./.test(host) ||
-      /^169\.254\./.test(host) ||
-      /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
-    ) {
-      return res.status(400).json({ error: 'Blocked host' });
-    }
-  } catch (e) {
+    // Reject obviously bad input early (invalid URL syntax).
+    new URL(target);
+  } catch {
     return res.status(400).json({ error: 'Invalid url' });
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
-
   try {
-    const origin = new URL(target).origin;
-    const response = await fetch(target, {
-      signal: controller.signal,
-      redirect: 'follow',
-      headers: {
-        // Mimic a real desktop browser to avoid naive bot blocks
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept':
-          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Cache-Control': 'no-cache',
-        'Referer': origin + '/',
-        'Upgrade-Insecure-Requests': '1'
-      }
-    });
-
-    clearTimeout(timeout);
+    const response = await safeFetch(target);
 
     if (!response.ok) {
       return res.status(response.status).json({ error: 'Upstream returned ' + response.status });
@@ -61,14 +135,15 @@ export default async function handler(req, res) {
     }
 
     let html = await response.text();
-    // Cap payload to keep response small
-    if (html.length > 800000) html = html.slice(0, 800000);
+    if (html.length > MAX_BYTES) html = html.slice(0, MAX_BYTES);
 
     return res.status(200).json({ html });
   } catch (err) {
-    clearTimeout(timeout);
     if (err.name === 'AbortError') {
       return res.status(504).json({ error: 'Fetch timed out' });
+    }
+    if (err.message === 'Blocked host') {
+      return res.status(400).json({ error: 'Blocked host' });
     }
     return res.status(502).json({ error: 'Fetch failed' });
   }

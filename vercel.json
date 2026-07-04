@@ -3,5 +3,8 @@
     "api/analyze.js": { "maxDuration": 30 },
     "api/fetch-url.js": { "maxDuration": 30 },
     "api/news.js": { "maxDuration": 15 }
-  }
+  },
+  "rewrites": [
+    { "source": "/", "destination": "/clearlens.html" }
+  ]
 }

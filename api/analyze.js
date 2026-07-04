@@ -1,24 +1,12 @@
-// Simple in-memory sliding-window rate limiter.
-// NOTE: resets on cold start and isn't shared across serverless instances/regions.
-// Good enough to stop casual abuse; upgrade to Upstash Redis if this app gets real traffic.
-const RATE_LIMIT = 10;          // max requests
-const WINDOW_MS = 60 * 1000;    // per 60 seconds
-const hits = new Map();         // ip -> array of timestamps
+// Simple daily usage cap: each user gets 7 analyses per day, resetting at midnight UTC.
+// Tracked in-memory per IP address (no login system exists, so IP is the best available identifier).
+// NOTE: this resets if the serverless function cold-starts, and is shared by users on the same
+// network/IP. That's the practical ceiling without adding accounts + a database.
+const DAILY_LIMIT = 7;
+const usage = new Map(); // key: "ip:YYYY-MM-DD" -> count
 
-function isRateLimited(ip) {
-  const now = Date.now();
-  const timestamps = (hits.get(ip) || []).filter(t => now - t < WINDOW_MS);
-  timestamps.push(now);
-  hits.set(ip, timestamps);
-
-  // Occasional cleanup so the Map doesn't grow forever across warm invocations
-  if (hits.size > 5000) {
-    for (const [key, arr] of hits) {
-      if (arr.every(t => now - t >= WINDOW_MS)) hits.delete(key);
-    }
-  }
-
-  return timestamps.length > RATE_LIMIT;
+function todayUTC() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function getClientIp(req) {
@@ -27,14 +15,35 @@ function getClientIp(req) {
   return req.socket?.remoteAddress || 'unknown';
 }
 
+function dailyLimitReached(ip) {
+  const key = ip + ':' + todayUTC();
+  return (usage.get(key) || 0) >= DAILY_LIMIT;
+}
+
+function recordUsage(ip) {
+  const today = todayUTC();
+  const key = ip + ':' + today;
+  usage.set(key, (usage.get(key) || 0) + 1);
+
+  // Occasional cleanup: drop any entries not from today so the Map doesn't grow forever.
+  if (usage.size > 5000) {
+    for (const k of usage.keys()) {
+      if (!k.endsWith(today)) usage.delete(k);
+    }
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const ip = getClientIp(req);
-  if (isRateLimited(ip)) {
-    return res.status(429).json({ error: 'Too many requests, please slow down', demo: true });
+  if (dailyLimitReached(ip)) {
+    return res.status(429).json({
+      error: 'Your daily limit of 7 analyses has been reached. Please try again tomorrow.',
+      dailyLimitReached: true
+    });
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -88,7 +97,7 @@ ${input}`)+SPECIFIC;
     const timeout = setTimeout(() => controller.abort(), 30000);
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent`,
       {
         method: 'POST',
         headers: {
@@ -128,6 +137,7 @@ ${input}`)+SPECIFIC;
     }
 
     const result = JSON.parse(json);
+    recordUsage(ip);
     return res.status(200).json({ data: result });
   } catch (err) {
     if (err.name === 'AbortError') {

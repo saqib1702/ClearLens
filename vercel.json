@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/api/analyze", "destination": "/api/analyze.js" },
+    { "source": "/api/news", "destination": "/api/news.js" },
+    { "source": "/api/fetch-url", "destination": "/api/fetch-url.js" }
+  ]
+}

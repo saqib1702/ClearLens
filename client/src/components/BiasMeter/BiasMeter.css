@@ -1,0 +1,87 @@
+/* BiasMeter.css */
+
+.bias-meter {
+  width: 100%;
+}
+
+.bias-meter__track {
+  position: relative;
+  height: 12px;
+  border-radius: 6px;
+  overflow: visible;
+  background: linear-gradient(
+    to right,
+    #3b82f6 0%,
+    #3b82f6 40%,
+    #6b7280 40%,
+    #6b7280 60%,
+    #ef4444 60%,
+    #ef4444 100%
+  );
+}
+
+.bias-meter__zone-pattern {
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Diagonal stripe pattern for left (blue) zone — WCAG non-color indicator */
+.bias-meter__zone-pattern::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 40%;
+  height: 100%;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 2px,
+    rgba(255, 255, 255, 0.15) 2px,
+    rgba(255, 255, 255, 0.15) 4px
+  );
+}
+
+/* Dot pattern for right (red) zone — WCAG non-color indicator */
+.bias-meter__zone-pattern::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 40%;
+  height: 100%;
+  background-image: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.2) 1px,
+    transparent 1px
+  );
+  background-size: 5px 5px;
+}
+
+.bias-meter__indicator {
+  position: absolute;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -50%);
+  transition: background-color 0.2s ease;
+  z-index: 1;
+}
+
+.bias-meter__indicator--blue {
+  background-color: #3b82f6;
+}
+
+.bias-meter__indicator--grey {
+  background-color: #6b7280;
+}
+
+.bias-meter__indicator--red {
+  background-color: #ef4444;
+}

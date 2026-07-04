@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClearLens — Intelligence Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+(function(){
+  var s=document.createElement('script');
+  s.src='https://unpkg.com/globe.gl@2.27.2/dist/globe.gl.min.js';
+  var loaded=false;
+  s.onload=function(){loaded=true;window.__globeReady=true;};
+  s.onerror=function(){window.__globeFailed=true;};
+  document.head.appendChild(s);
+  setTimeout(function(){if(!loaded){s.remove();window.__globeFailed=true;}},3000);
+})();
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0a;--card-bg:#161616;--border:#2a2a2a;--border-h:#3a3a3a;
+  --t1:#f5f5f5;--t2:#a0a0a0;--t3:#666;
+  --accent:#5b5fff;--accent-soft:rgba(91,95,255,0.1);--accent-border:rgba(91,95,255,0.3);
+  --red:#ef4444;--amber:#f59e0b;--green:#10b981;--blue:#60a5fa;
+  --r:16px;--nav:60px;--sidebar:240px;
+  --font-h:'Plus Jakarta Sans',sans-serif;--font-b:'DM Sans',sans-serif;
+  --s1:8px;--s2:16px;--s3:24px;--s4:32px;--s5:48px;
+  --max-w:1280px;--transition:200ms ease;
+  --card-bg-2:#1c1c1c;--dot:rgba(255,255,255,0.05)
+}
+html.light{--bg:#fafafa;--card-bg:#ffffff;--border:#e5e5e5;--border-h:#d0d0d0;--t1:#111;--t2:#555;--t3:#999;--accent-soft:rgba(91,95,255,0.06);--card-bg-2:#f3f3f5;--dot:rgba(0,0,0,0.045)}
+body{font-family:var(--font-b);font-size:15px;line-height:1.65;color:var(--t1);background:var(--bg);min-height:100vh;display:flex;flex-direction:column;padding-left:var(--sidebar);overflow-x:hidden;transition:background .3s,color .3s,padding-left .3s ease;scrollbar-width:thin;scrollbar-color:rgba(91,95,255,0.4) transparent}
+/* Custom scrollbar (WebKit) */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(91,95,255,0.4);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:rgba(91,95,255,0.6)}
+/* BACKGROUND FX LAYERS */
+body::before{content:'';position:fixed;inset:0;z-index:-2;pointer-events:none;background:
+  radial-gradient(var(--dot) 1.5px,transparent 1.5px) 0 0/28px 28px,
+  radial-gradient(circle at 10% 12%,rgba(139,92,246,0.12),transparent 45%),
+  radial-gradient(circle at 90% 10%,rgba(34,211,238,0.08),transparent 48%),
+  radial-gradient(circle at 50% 95%,rgba(236,72,153,0.07),transparent 50%)}
+body::after{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.04;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+h1,h2,h3,.card-title,.feature-title,.nav-brand{font-family:var(--font-h)}
+h1,h2,h3,.nav-brand,.card-title,.feature-title,.hero-title{font-family:'Plus Jakarta Sans',sans-serif;letter-spacing:-0.02em}
+.btn{font-family:'Plus Jakarta Sans',sans-serif;letter-spacing:0.01em}
+.card-title{font-size:0.68rem;letter-spacing:0.09em;font-weight:700}
+textarea,input{font-family:'DM Sans',sans-serif;font-size:0.9rem}
+.nav-link{font-family:'DM Sans',sans-serif;font-size:0.88rem;font-weight:500}
+a{color:var(--accent);text-decoration:none}
+.hidden{display:none!important}
+/* SMOOTH THEME TRANSITION — only color props animate, no layout reflow */
+html.theme-anim *,html.theme-anim *::before,html.theme-anim *::after{transition:background-color .35s ease,background-image .35s ease,color .35s ease,border-color .35s ease,fill .35s ease,stroke .35s ease,box-shadow .35s ease,opacity .35s ease!important}
+#globe-container{transition:opacity .3s ease}
+</style>
+</head>
+<body>
+<button class="mobile-menu-btn" id="mobile-menu-btn"><i data-lucide="menu"></i></button>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+<nav class="nav" id="sidebar">
+<div class="sidebar-head"><span class="nav-brand"><span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1.8 12S5.2 5.5 12 5.5 22.2 12 22.2 12 18.8 18.5 12 18.5 1.8 12 1.8 12Z" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.1" fill="#fff"/><circle cx="13.1" cy="10.9" r="1" fill="#5b5fff"/></svg></span><span class="brand-full">ClearLens</span></span><button class="collapse-btn" id="collapse-btn" title="Collapse sidebar"><i data-lucide="panel-left-close"></i></button></div>
+<ul class="nav-links">
+<li><button class="nav-link active" data-page="home" data-tip="Home"><i data-lucide="home"></i> <span class="nav-label">Home</span></button></li>
+<li><button class="nav-link" data-page="analyze" data-tip="Analyze"><i data-lucide="scan-search"></i> <span class="nav-label">Analyze</span></button></li>
+<li><button class="nav-link" data-page="compare" data-tip="Compare"><i data-lucide="columns-2"></i> <span class="nav-label">Compare</span></button></li>
+<li><button class="nav-link" data-page="dashboard" data-tip="Dashboard"><i data-lucide="globe-2"></i> <span class="nav-label">Dashboard</span></button></li>
+<li><button class="nav-link" data-page="history" data-tip="History"><i data-lucide="history"></i> <span class="nav-label">History</span></button></li>
+</ul>
+<div class="nav-footer">
+<button class="nav-link" id="btn-theme" data-tip="Theme"><i data-lucide="moon"></i> <span class="nav-label">Theme</span></button>
+<button class="nav-link" data-page="settings" data-tip="Settings"><i data-lucide="settings"></i> <span class="nav-label">Settings</span></button>
+</div>
+</nav>
+
+<div class="loading-overlay hidden" id="loading-overlay"><div class="loading-logo">ClearLens</div><div class="loading-ring"></div><div class="loading-text">Generating intelligence report...</div></div>
+<div class="demo-badge hidden" id="demo-badge"><i data-lucide="alert-triangle"></i> Demo Mode</div>
+
+<!-- HOME PAGE -->
+<div class="page active" id="page-home">
+<div class="hero">
+<div class="hero-badge"><span class="dot-live"></span> AI-Powered Intelligence Platform</div>
+<h1 class="hero-title">See Through<br>Media Bias</h1>
+<p class="hero-sub">AI-powered multi-dimensional analysis that reveals what news<br>coverage isn't telling you — bias scores, missing facts, global perspectives.</p>
+<button class="btn btn-primary btn-lg" id="btn-get-started"><i data-lucide="arrow-right"></i> Get Started</button>
+<div style="margin-top:var(--s2)"><a href="#" id="link-compare" style="font-size:.85rem;color:var(--t2)">or jump straight to Compare →</a></div>
+</div>
+<div class="section-divider"></div>
+<div class="home-features">
+<div class="card home-feat"><div class="home-feat-icon"><i data-lucide="scale"></i></div><h3>Bias Detection</h3><p>Political lean scored -100 to +100 with AI rationale</p></div>
+<div class="card home-feat"><div class="home-feat-icon"><i data-lucide="globe-2"></i></div><h3>Global Perspectives</h3><p>See how 6+ countries frame the same story differently</p></div>
+<div class="card home-feat"><div class="home-feat-icon"><i data-lucide="brain-circuit"></i></div><h3>AI Predictions</h3><p>Forecasts with confidence scores and alternative scenarios</p></div>
+<div class="card home-feat"><div class="home-feat-icon"><i data-lucide="search-check"></i></div><h3>Missing Facts</h3><p>Identifies gaps and omissions in reporting</p></div>
+</div>
+<div class="card" style="max-width:960px;margin:var(--s4) auto 0">
+<div class="card-title">How It Works</div>
+<div class="how-steps">
+<div class="how-step"><div class="how-icon"><i data-lucide="clipboard-paste"></i></div><div class="how-num">1 · Paste</div><div class="how-desc">Drop in an article, press release, or topic</div></div>
+<div class="how-arrow"><i data-lucide="arrow-right"></i></div>
+<div class="how-step"><div class="how-icon"><i data-lucide="sparkles"></i></div><div class="how-num">2 · Analyze</div><div class="how-desc">AI scores bias, credibility, and gaps</div></div>
+<div class="how-arrow"><i data-lucide="arrow-right"></i></div>
+<div class="how-step"><div class="how-icon"><i data-lucide="lightbulb"></i></div><div class="how-num">3 · Get Insights</div><div class="how-desc">Read perspectives, context, and predictions</div></div>
+</div>
+</div>
+</div>
+
+<!-- ANALYZE PAGE -->
+<div class="page" id="page-analyze">
+<div class="page-header"><h2>Intelligence Analysis</h2><p>Multi-dimensional bias and credibility assessment</p></div>
+<div class="card input-panel">
+<div class="input-tabs"><button class="input-tab active" id="tab-paste">Paste Text</button><button class="input-tab" id="tab-url">From URL</button></div>
+<div id="paste-mode"><textarea id="input-text" placeholder="Paste a news article, press release, or geopolitical topic..." maxlength="10000"></textarea></div>
+<div id="url-mode" class="hidden"><div style="display:flex;gap:var(--s1);margin-bottom:var(--s1)"><input type="url" id="url-input" placeholder="https://..." style="flex:1"><button class="btn btn-secondary" id="btn-fetch-url">Fetch</button></div><div id="url-status" class="url-status"></div><textarea id="url-content" placeholder="Extracted content appears here..." style="min-height:100px" readonly></textarea></div>
+<div class="validation-msg" id="validation-msg"></div>
+<div class="input-controls"><button class="btn btn-primary" id="btn-analyze"><i data-lucide="sparkles"></i> Run Analysis</button><button class="btn btn-secondary" id="btn-reset"><i data-lucide="rotate-ccw"></i> Clear</button><span class="char-count" id="char-count">0 / 10,000</span></div>
+</div>
+<div id="features-section" class="features-grid">
+<div class="card feature-card"><div class="feat-icon"><i data-lucide="scale"></i></div><div class="feature-title">Bias Detection</div><div class="feature-desc">Political lean scored on a -100 to +100 scale with rationale</div></div>
+<div class="card feature-card"><div class="feat-icon"><i data-lucide="globe-2"></i></div><div class="feature-title">Global Perspectives</div><div class="feature-desc">See how 6+ countries frame the same story</div></div>
+<div class="card feature-card"><div class="feat-icon"><i data-lucide="brain-circuit"></i></div><div class="feature-title">AI Prediction</div><div class="feature-desc">Forecasts with confidence scores and scenarios</div></div>
+</div>
+<div class="skeleton-grid hidden" id="skeleton-loader"><div class="skeleton skel-full" style="height:160px"></div><div class="skeleton" style="height:200px"></div><div class="skeleton" style="height:200px"></div><div class="skeleton" style="height:180px"></div><div class="skeleton" style="height:180px"></div></div>
+<div class="error-msg hidden" id="error-msg"></div>
+<div class="hidden" id="share-row" style="display:flex;gap:var(--s1);justify-content:flex-end;margin-bottom:var(--s2);margin-top:var(--s3)"><button class="btn btn-secondary" id="btn-download-img"><i data-lucide="file-down"></i> Download Report</button></div>
+<div class="results-grid hidden" id="results">
+<div id="print-header" class="full-width"><h1 style="font-family:var(--font-h);font-size:1.6rem;margin-bottom:4px">ClearLens Intelligence Report</h1><p id="print-meta" style="font-size:.8rem;color:#666"></p><hr style="margin:12px 0;border:none;border-top:1px solid #ccc"></div>
+<div class="card full-width" id="bias-card"><div class="card-title">Media Bias Score</div><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap"><span id="bias-badge"></span><span id="bias-number" style="font-size:1.5rem;font-weight:800;font-variant-numeric:tabular-nums">0</span><span id="source-badge" class="hidden"></span><span id="topic-badge" class="hidden"></span></div><div id="bias-track" class="bias-track"><div id="bias-indicator" class="bias-indicator"></div></div><div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.72rem;color:var(--t3)"><span>Left (-100)</span><span>Center</span><span>Right (+100)</span></div><p id="bias-rationale" style="margin-top:var(--s2);font-size:.85rem;color:var(--t2);line-height:1.7"></p><div id="source-rating" class="hidden" style="margin-top:var(--s2)"></div></div>
+<div class="card" id="credibility-card"><div class="card-title">Credibility Assessment</div><div id="credibility-content"></div></div>
+<div class="card" id="facts-card"><div class="card-title">Missing Facts</div><ol id="facts-list" style="list-style:none"></ol></div>
+<div class="card" id="conflict-card"><div class="card-title">Context &amp; Key Players</div><p id="conflict-summary" style="font-size:.86rem;color:var(--t2);line-height:1.7;margin-bottom:var(--s2)"></p><div id="players-list"></div></div>
+<div class="card" id="prediction-card"><div class="card-title">Predictive Analysis</div><p id="prediction-outcome" style="font-size:.95rem;font-weight:600;margin-bottom:var(--s2);line-height:1.6"></p><div style="display:flex;align-items:center;gap:12px;margin-bottom:var(--s2)"><div style="flex:1;height:6px;border-radius:3px;background:var(--border);overflow:hidden"><div id="confidence-fill" style="height:100%;border-radius:3px;background:var(--accent);transition:width 1s;width:0%"></div></div><span id="confidence-pct" style="font-size:.85rem;font-weight:700;color:var(--accent)">0%</span></div><div id="scenarios-list"></div><p id="prediction-disclaimer" style="margin-top:var(--s2);font-size:.74rem;color:var(--t3);font-style:italic"></p></div>
+<div class="card full-width" id="annotated-card"><button id="annotated-toggle" class="annotated-toggle"><span style="display:flex;align-items:center;gap:8px"><i data-lucide="highlighter"></i> View Annotated Article</span><i data-lucide="chevron-down" id="annotated-chevron"></i></button><div id="annotated-body" class="hidden" style="margin-top:var(--s2)"><div class="annotated-legend"><span><span class="hl-emotional">highlight</span> Emotional language</span><span><span class="hl-framing">highlight</span> One-sided framing</span></div><div id="annotated-text" class="annotated-text"></div></div></div>
+</div>
+</div>
+
+<!-- COMPARE PAGE -->
+<div class="page" id="page-compare">
+<div class="page-header"><h2>Article Comparison</h2><p>Compare 2-3 articles to find the most balanced source</p></div>
+<div class="compare-inputs" id="compare-inputs"></div>
+<div style="text-align:center;margin:var(--s3) 0;display:flex;gap:var(--s1);justify-content:center;flex-wrap:wrap"><button class="btn btn-secondary" id="btn-add-article"><i data-lucide="plus"></i> Add Article</button><button class="btn btn-primary" id="btn-compare"><i data-lucide="git-compare-arrows"></i> Compare Sources</button></div>
+<div class="error-msg hidden" id="compare-error"></div>
+<div class="hidden" id="compare-loading"></div>
+<div class="hidden" id="compare-results"></div>
+</div>
+
+<!-- DASHBOARD PAGE -->
+<div class="page" id="page-dashboard">
+<div class="page-header"><h2>Global Conflict Tracker</h2><p>Real-time monitoring of active geopolitical hotspots</p></div>
+<div class="bento-dashboard">
+<div class="card bento-globe"><div class="card-title">Live Globe</div><div id="globe-container" style="width:100%;height:480px"></div><div id="globe-tooltip" class="globe-tooltip"></div></div>
+<div class="card bento-trending"><div class="card-title">Trending Topics</div><p style="font-size:.82rem;color:var(--t3);margin-bottom:var(--s2)">Click to analyze</p><div id="trending-grid" class="trending-grid"></div></div>
+</div>
+<div style="display:flex;align-items:center;gap:var(--s2);margin:var(--s3) 0"><button class="btn btn-primary" id="btn-refresh-dashboard"><i data-lucide="refresh-cw"></i> Refresh Data</button><span id="dashboard-updated" style="font-size:.8rem;color:var(--t3)"></span></div>
+<div class="error-msg hidden" id="dashboard-error"></div>
+<div class="card" style="margin-top:var(--s3)"><div class="card-title">Latest Headlines</div><div class="hidden" id="news-loading"><div class="news-grid"><div class="skeleton" style="height:240px"></div><div class="skeleton" style="height:240px"></div><div class="skeleton" style="height:240px"></div><div class="skeleton" style="height:240px"></div></div></div><div id="news-grid" class="news-grid"></div><p id="news-empty" class="hidden" style="font-size:.8rem;color:var(--t3);font-style:italic;margin-top:var(--s1)">Demo data shown. Add NewsAPI key in Settings for live headlines.</p></div>
+</div>
+
+<!-- SETTINGS PAGE -->
+<div class="page" id="page-settings">
+<div class="page-header"><h2>Settings</h2><p>Preferences and app info</p></div>
+<div class="card" style="max-width:560px;margin-bottom:var(--s2)"><div class="card-title" style="display:flex;align-items:center;gap:6px"><i data-lucide="palette"></i> Theme</div><p style="font-size:.85rem;color:var(--t2);margin-bottom:var(--s2)">Choose your preferred appearance.</p><div style="display:flex;gap:var(--s1)"><button class="btn btn-secondary" id="btn-theme-dark">Dark</button><button class="btn btn-secondary" id="btn-theme-light">Light</button></div></div>
+<div class="card" style="max-width:560px"><div class="card-title" style="display:flex;align-items:center;gap:6px"><i data-lucide="info"></i> About ClearLens</div><p style="font-size:.82rem;color:var(--t2);line-height:1.7;margin-bottom:var(--s2)">ClearLens is an AI-powered intelligence platform that analyzes news articles for media bias, credibility, missing facts, global perspectives, and predicted developments.</p><p style="font-size:.78rem;color:var(--t3);line-height:1.6">API keys are managed server-side and never exposed to the browser. Analysis is powered by Google Gemini. Headlines provided by NewsAPI.</p></div>
+</div>
+
+<!-- HISTORY PAGE -->
+<div class="page" id="page-history">
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:var(--s2)"><div><h2>Analysis History</h2><p>Your recent analyses, saved locally in this browser</p></div><button class="btn btn-secondary" id="btn-clear-history"><i data-lucide="trash-2"></i> Clear History</button></div>
+<div id="history-empty" class="card" style="text-align:center;padding:var(--s5);color:var(--t3)">No saved analyses yet. Run an analysis to see it here.</div>
+<div id="history-list" class="history-list"></div>
+</div>
+
+<footer class="site-footer">
+<div class="footer-inner">
+<div class="footer-brand"><span class="nav-brand" style="font-size:1.1rem">ClearLens</span><span class="footer-tag">See through media bias — clarity for every story.</span></div>
+<div class="footer-links"><a href="#" title="GitHub" aria-label="GitHub"><i data-lucide="github"></i></a><a href="#" title="LinkedIn" aria-label="LinkedIn"><i data-lucide="linkedin"></i></a></div>
+</div>
+</footer>
+
+<div id="share-toast" class="share-toast"></div>
+<div id="export-card-holder" style="position:fixed;left:-9999px;top:0;pointer-events:none"></div>
+
+<style>
+/* SIDEBAR */
+.nav{position:fixed;top:0;left:0;bottom:0;width:var(--sidebar);background:rgba(10,10,10,0.75);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border-right:1px solid var(--border);box-shadow:8px 0 32px rgba(0,0,0,0.4);display:flex;flex-direction:column;padding:var(--s3) var(--s2);z-index:1000;transition:transform .3s,width .3s ease,background .3s,border-color .3s}
+html.light .nav{background:rgba(255,255,255,0.8);box-shadow:8px 0 32px rgba(0,0,0,0.08)}
+.sidebar-head{display:flex;align-items:center;justify-content:space-between;padding:0 var(--s2);margin-bottom:var(--s4);min-height:32px}
+.nav-brand{display:flex;align-items:center;gap:10px;font-size:1.25rem;font-weight:800;letter-spacing:-.03em}
+.brand-mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#a855f7,#3b82f6);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 14px rgba(91,95,255,0.45),inset 0 1px 0 rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.18)}
+.brand-mark svg{width:20px;height:20px}
+.collapse-btn{background:none;border:none;color:var(--t3);cursor:pointer;padding:4px;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:all var(--transition)}
+.collapse-btn:hover{color:var(--t1);background:var(--accent-soft)}
+.collapse-btn svg{width:18px;height:18px}
+.nav-links{display:flex;flex-direction:column;gap:4px;list-style:none}
+.nav-link{position:relative;width:100%;min-height:52px;padding:0 var(--s2);border-radius:10px;font-size:.92rem;font-weight:500;color:var(--t2);cursor:pointer;transition:color .25s ease,background .25s ease,border-color .25s ease,font-weight .25s ease;border:none;border-left:3px solid transparent;background:none;display:flex;align-items:center;gap:14px;white-space:nowrap;overflow:hidden}
+.nav-link svg{width:20px;height:20px;stroke-width:2;flex-shrink:0}
+.nav-link:hover{color:var(--t1);background:var(--accent-soft)}
+.nav-link.active{color:var(--t1);background:var(--accent-soft);border-left-color:var(--accent);font-weight:700;box-shadow:0 0 16px rgba(91,95,255,0.3)}
+.nav-footer{margin-top:auto;display:flex;flex-direction:column;gap:4px;padding-top:var(--s2);border-top:1px solid var(--border)}
+/* COLLAPSED STATE */
+html.sidebar-collapsed{--sidebar:72px}
+html.sidebar-collapsed .brand-full{display:none}
+html.sidebar-collapsed .sidebar-head{justify-content:center;flex-direction:column;gap:var(--s2)}
+html.sidebar-collapsed .nav-label{opacity:0;width:0;display:none}
+html.sidebar-collapsed .nav-link{justify-content:center;padding:0;gap:0}
+html.sidebar-collapsed .collapse-btn svg{transform:rotate(180deg)}
+/* TOOLTIP (collapsed only) */
+html.sidebar-collapsed .nav-link[data-tip]:hover::after{content:attr(data-tip);position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);background:var(--card-bg);border:1px solid var(--border);color:var(--t1);font-size:.78rem;font-weight:600;padding:5px 10px;border-radius:6px;white-space:nowrap;z-index:1200;box-shadow:0 4px 12px rgba(0,0,0,0.2);pointer-events:none}
+.mobile-menu-btn{display:none;position:fixed;top:12px;left:12px;z-index:1100;width:44px;height:44px;border-radius:10px;background:var(--card-bg);border:1px solid var(--border);color:var(--t1);cursor:pointer;align-items:center;justify-content:center}
+.mobile-menu-btn svg{width:20px;height:20px}
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:999}
+.sidebar-overlay.show{display:block}
+/* PAGES */
+.page{display:none;width:100%;max-width:var(--max-w);margin:0 auto;padding:var(--s4) var(--s3)}.page.active{display:block}
+.page-enter{animation:pageEnter .38s cubic-bezier(.22,1,.36,1)}
+.page-exit{animation:pageExit .18s ease forwards}
+@keyframes pageEnter{from{opacity:0;transform:perspective(1200px) rotateY(8deg)}to{opacity:1;transform:perspective(1200px) rotateY(0)}}
+@keyframes pageExit{from{opacity:1;transform:perspective(1200px) rotateY(0)}to{opacity:0;transform:perspective(1200px) rotateY(-8deg)}}
+.page-header{margin-bottom:var(--s4)}
+.page-header h2{font-size:1.7rem;font-weight:800;letter-spacing:-.03em;margin-bottom:4px}
+.page-header p{color:var(--t2);font-size:.9rem}
+/* CARDS */
+.card{background:var(--card-bg);border:1px solid rgba(255,255,255,0.06);border-radius:20px;padding:var(--s3);box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),0 4px 24px rgba(0,0,0,0.3);transition:box-shadow var(--transition),border-color var(--transition),transform var(--transition)}
+.card:hover{transform:translateY(-3px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.1),0 12px 40px rgba(0,0,0,0.45);border-color:rgba(255,255,255,0.1)}
+html.light .card{border:1px solid rgba(0,0,0,0.05);box-shadow:0 2px 16px rgba(0,0,0,0.06),0 1px 0 rgba(255,255,255,0.9) inset}
+html.light .card:hover{transform:translateY(-3px);box-shadow:0 10px 32px rgba(0,0,0,0.1),0 1px 0 rgba(255,255,255,0.9) inset}
+.card-title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);margin-bottom:var(--s2)}
+/* BUTTONS */
+.btn{min-height:40px;padding:10px 20px;border:none;border-radius:var(--s1);font-size:.85rem;font-weight:600;letter-spacing:.01em;cursor:pointer;transition:all var(--transition);display:inline-flex;align-items:center;gap:6px;font-family:var(--font-b)}
+.btn:active:not(:disabled){transform:scale(.96)}
+.btn svg{width:15px;height:15px;stroke-width:2}
+.btn-primary{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;box-shadow:0 4px 20px rgba(99,102,241,0.45)}
+.btn-primary:hover:not(:disabled){box-shadow:0 6px 28px rgba(99,102,241,0.65)}
+.btn-secondary{background:transparent;color:var(--t2);border:1px solid var(--border)}
+.btn-secondary:hover:not(:disabled){border-color:var(--border-h);color:var(--t1)}
+.btn-lg{padding:14px 32px;font-size:1rem;border-radius:12px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+/* INPUTS */
+textarea,input[type=url],input[type=password]{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--s1);padding:12px var(--s2);color:var(--t1);font-size:.9rem;font-family:var(--font-b);transition:border-color var(--transition);line-height:1.6}
+textarea{min-height:120px;resize:vertical}
+textarea:focus,input:focus{outline:none;border-color:var(--accent)}
+textarea::placeholder,input::placeholder{color:var(--t3)}
+.input-tabs{display:flex;gap:4px;margin-bottom:var(--s2)}
+.input-tab{padding:6px 14px;border-radius:6px;font-size:.8rem;font-weight:600;border:1px solid var(--border);background:transparent;color:var(--t2);cursor:pointer;transition:all var(--transition)}
+.input-tab.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-border)}
+.input-controls{display:flex;gap:var(--s1);margin-top:var(--s2);align-items:center;flex-wrap:wrap}
+.validation-msg{color:var(--red);font-size:.8rem;margin-top:var(--s1);min-height:1.2em}
+.char-count{margin-left:auto;font-size:.78rem;color:var(--t3)}
+.url-status{font-size:.78rem;color:var(--t3);min-height:1.4em;margin-bottom:var(--s1)}
+.error-msg{background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:var(--s1);padding:var(--s2);color:var(--red);font-size:.85rem;margin-bottom:var(--s2)}
+</style>
+
+<style>
+/* HOME */
+.hero{text-align:center;padding:var(--s5) 0 var(--s4);max-width:640px;margin:0 auto;position:relative}
+.hero-badge{display:inline-flex;align-items:center;gap:7px;font-size:.78rem;font-weight:600;padding:6px 14px;border-radius:999px;border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--t1);margin-bottom:var(--s3)}
+.dot-live{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(16,185,129,0.2);animation:livePulse 2s ease infinite}
+@keyframes livePulse{0%,100%{opacity:1}50%{opacity:.5}}
+.hero-title{position:relative;font-size:clamp(2.4rem,5vw,3.6rem);font-weight:800;letter-spacing:-.04em;line-height:1.1;margin-bottom:var(--s3);background:linear-gradient(135deg,#f5f5f5 0%,#a78bfa 40%,#60a5fa 70%,#f5f5f5 100%);background-size:300% 300%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;animation:heroGradient 6s ease infinite}
+html.light .hero-title{background:linear-gradient(135deg,#111 0%,#6d28d9 40%,#2563eb 70%,#111 100%);background-size:300% 300%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+@keyframes heroGradient{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+.hero-title::before{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:560px;height:320px;max-width:120vw;background:radial-gradient(ellipse at center,rgba(91,95,255,0.18),rgba(168,85,247,0.12) 40%,transparent 70%);filter:blur(50px);z-index:-1;pointer-events:none}
+.section-divider{height:1px;max-width:720px;margin:var(--s4) auto;background:linear-gradient(90deg,transparent,var(--border-h),transparent)}
+/* CARD SHADE VARIATION */
+.home-features .home-feat:nth-child(even),.results-grid .card:nth-child(even),#conflicts-grid .conflict-card:nth-child(even),.news-grid .news-card:nth-child(even){background:var(--card-bg-2)}
+/* FOOTER */
+.site-footer{width:100%;max-width:var(--max-w);margin:auto auto 0;padding:var(--s3);padding-top:var(--s4);border-top:1px solid var(--border)}
+.footer-inner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--s2)}
+.footer-brand{display:flex;flex-direction:column;gap:2px}
+.footer-tag{font-size:.78rem;color:var(--t3)}
+.footer-links{display:flex;gap:var(--s2)}
+.footer-links a{color:var(--t3);display:flex;align-items:center;transition:color var(--transition)}
+.footer-links a:hover{color:var(--accent)}
+.footer-links svg{width:18px;height:18px}
+/* HOW IT WORKS */
+.how-steps{display:flex;align-items:stretch;gap:var(--s2)}
+.how-step{flex:1;text-align:center;padding:var(--s2)}
+.how-icon{width:42px;height:42px;border-radius:10px;background:var(--accent-soft);display:flex;align-items:center;justify-content:center;margin:0 auto var(--s2)}
+.how-icon svg{width:20px;height:20px;stroke:var(--accent);stroke-width:2}
+.how-num{font-size:.84rem;font-weight:700;margin-bottom:4px}
+.how-desc{font-size:.76rem;color:var(--t3);line-height:1.5}
+.how-arrow{display:flex;align-items:center;color:var(--t3)}
+.how-arrow svg{width:18px;height:18px}
+@media(max-width:768px){.how-steps{flex-direction:column}.how-arrow{transform:rotate(90deg);justify-content:center}}
+.hero-sub{font-size:1.05rem;color:var(--t2);line-height:1.7;margin-bottom:var(--s4)}
+.home-features{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--s2);max-width:720px;margin:0 auto}
+.home-feat{text-align:left;padding:var(--s3)}
+.home-feat h3{font-size:.95rem;font-weight:700;margin-bottom:4px}
+.home-feat p{font-size:.82rem;color:var(--t2);line-height:1.5}
+.home-feat-icon{width:40px;height:40px;border-radius:10px;background:var(--accent-soft);display:flex;align-items:center;justify-content:center;margin-bottom:var(--s2)}
+.home-feat-icon svg{width:20px;height:20px;stroke:var(--accent);stroke-width:2}
+/* FEATURES GRID (analyze) */
+.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s2);margin-top:var(--s3)}
+.feature-card{padding:var(--s3)}
+.feature-card:nth-child(1){border-top:2px solid #6366f1;box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),0 4px 24px rgba(0,0,0,0.3),0 -1px 16px rgba(99,102,241,0.2)}
+.feature-card:nth-child(2){border-top:2px solid #60a5fa;box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),0 4px 24px rgba(0,0,0,0.3),0 -1px 16px rgba(96,165,250,0.2)}
+.feature-card:nth-child(3){border-top:2px solid #10b981;box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),0 4px 24px rgba(0,0,0,0.3),0 -1px 16px rgba(16,185,129,0.2)}
+.feature-card:nth-child(1) .feat-icon{background:rgba(99,102,241,0.15)}.feature-card:nth-child(1) .feat-icon svg{stroke:#818cf8}
+.feature-card:nth-child(2) .feat-icon{background:rgba(96,165,250,0.15)}.feature-card:nth-child(2) .feat-icon svg{stroke:#60a5fa}
+.feature-card:nth-child(3) .feat-icon{background:rgba(16,185,129,0.15)}.feature-card:nth-child(3) .feat-icon svg{stroke:#34d399}
+.feat-icon{width:36px;height:36px;border-radius:8px;background:var(--accent-soft);display:flex;align-items:center;justify-content:center;margin-bottom:var(--s2)}
+.feat-icon svg{width:18px;height:18px;stroke:var(--accent);stroke-width:2}
+.feature-title{font-size:.9rem;font-weight:700;margin-bottom:4px}
+.feature-desc{font-size:.8rem;color:var(--t2);line-height:1.5}
+/* SKELETON */
+.skeleton-grid{display:grid;gap:var(--s2);margin-top:var(--s3)}
+@media(min-width:768px){.skeleton-grid{grid-template-columns:1fr 1fr}.skeleton-grid .skel-full{grid-column:1/-1}}
+.skeleton{border-radius:var(--r);background:var(--card-bg);border:1px solid var(--border);position:relative;overflow:hidden}
+.skeleton::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.03),transparent);animation:shimmer 1.5s infinite}
+html.light .skeleton::after{background:linear-gradient(90deg,transparent,rgba(0,0,0,0.03),transparent)}
+@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+/* RESULTS */
+.results-grid{display:grid;gap:var(--s2);margin-top:var(--s3)}
+@media(min-width:768px){.results-grid{grid-template-columns:1fr 1fr}.results-grid .full-width{grid-column:1/-1}}
+.results-grid .card{opacity:0;transform:translateY(12px)}.results-grid .card.revealed{animation:reveal .4s ease forwards}
+@keyframes reveal{to{opacity:1;transform:translateY(0)}}
+.bias-track{position:relative;height:10px;border-radius:5px;background:linear-gradient(to right,#3b82f6,#8b5cf6,#ec4899,#ef4444);overflow:visible}
+.bias-indicator{position:absolute;top:50%;width:18px;height:18px;border-radius:50%;border:2.5px solid var(--t1);transform:translate(-50%,-50%);left:50%;transition:left 1.2s cubic-bezier(.22,1,.36,1),background-color .3s;z-index:1;background:var(--t3);box-shadow:0 0 0 3px rgba(255,255,255,0.2),0 0 16px currentColor}
+/* CREDIBILITY */
+.cred-gauge{position:relative;width:90px;height:90px;margin:0 auto var(--s2)}
+.cred-gauge svg{transform:rotate(-90deg)}
+.cred-gauge .cred-ring{animation:drawCircle 1.5s cubic-bezier(.22,1,.36,1) forwards}
+@keyframes drawCircle{from{stroke-dashoffset:var(--circ)}to{stroke-dashoffset:var(--off)}}
+.cred-gauge-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:800;font-variant-numeric:tabular-nums}
+.cred-factor{display:flex;align-items:center;gap:var(--s1);margin-bottom:10px}
+.cred-factor-label{font-size:.78rem;color:var(--t2);min-width:120px;font-weight:500}
+.cred-factor-bar{flex:1;height:6px;border-radius:3px;background:var(--border);overflow:hidden}
+.cred-factor-fill{height:100%;border-radius:3px;transition:width 1.2s}
+.cred-factor-val{font-size:.78rem;font-weight:700;min-width:34px;text-align:right}
+.fact-item{display:flex;gap:var(--s2);padding:var(--s2);border-radius:12px;background:var(--bg);border:1px solid var(--border);margin-bottom:var(--s1);opacity:0;transform:translateY(6px);animation:reveal .4s ease forwards}
+/* COMPARE */
+.compare-inputs{display:grid;grid-template-columns:1fr 48px 1fr;gap:0;align-items:stretch}
+.compare-inputs textarea{width:100%;height:320px;resize:none}
+.compare-label{font-size:.72rem;font-weight:700;letter-spacing:.06em;display:block;margin-bottom:var(--s1)}
+.vs-divider{display:flex;align-items:center;justify-content:center}
+.vs-badge{background:var(--accent);color:#fff;font-size:.65rem;font-weight:800;padding:8px 10px;border-radius:6px;letter-spacing:.08em}
+.compare-result-grid{display:grid;grid-template-columns:1fr auto 1fr;gap:var(--s2);align-items:start}
+.compare-col{text-align:center}
+.compare-verdict{padding:var(--s3);text-align:center;display:flex;flex-direction:column;align-items:center;gap:var(--s1)}
+.compare-verdict-text{font-size:.92rem;font-weight:700}
+.compare-verdict-detail{font-size:.76rem;color:var(--t3)}
+</style>
+
+<style>
+/* DASHBOARD BENTO */
+.bento-dashboard{display:grid;grid-template-columns:2fr 1fr;gap:var(--s2);margin-bottom:var(--s2)}
+.bento-globe{padding:0;overflow:hidden;position:relative;grid-row:span 1}
+.bento-globe .card-title{position:absolute;top:var(--s2);left:var(--s3);z-index:5}
+.bento-trending{display:flex;flex-direction:column}
+.trending-grid{display:flex;flex-direction:column;gap:var(--s1)}
+.trending-card{position:relative;padding:10px var(--s2);padding-right:28px;border-radius:var(--s1);border:1px solid var(--border);cursor:pointer;transition:all var(--transition);font-size:.84rem;font-weight:500;color:var(--t2)}
+.trending-card:hover{border-color:var(--accent-border);color:var(--t1);background:var(--accent-soft)}
+.trending-card::after{content:'\2192';position:absolute;right:12px;top:50%;transform:translateY(-50%) translateX(-4px);opacity:0;color:var(--accent);font-weight:700;transition:opacity var(--transition),transform var(--transition)}
+.trending-card:hover::after{opacity:1;transform:translateY(-50%) translateX(0)}
+#conflicts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:var(--s2)}
+.conflict-card{border-radius:var(--r);background:var(--card-bg);border:1px solid var(--border);padding:var(--s3);transition:all var(--transition);cursor:pointer}
+.conflict-card:hover{border-color:var(--border-h);box-shadow:0 2px 12px rgba(0,0,0,0.1)}
+.conflict-card.sev-high{border-left:3px solid var(--red)}
+.conflict-card.sev-medium{border-left:3px solid var(--amber)}
+.conflict-card.sev-low{border-left:3px solid var(--green)}
+.severity-high{background:rgba(239,68,68,0.1);color:var(--red);font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:4px}
+.severity-medium{background:rgba(245,158,11,0.1);color:var(--amber);font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:4px}
+.severity-low{background:rgba(16,185,129,0.1);color:var(--green);font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:4px}
+.news-grid{display:grid;gap:var(--s2);grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.news-card{border-radius:12px;background:var(--bg);border:1px solid var(--border);overflow:hidden;transition:transform var(--transition),border-color var(--transition),box-shadow var(--transition);cursor:pointer}
+.news-card:hover{transform:translateY(-4px);border-color:var(--border-h);box-shadow:0 8px 28px rgba(0,0,0,0.25)}
+.news-card-imgwrap{width:100%;height:140px;overflow:hidden}
+.news-card-img{width:100%;height:140px;object-fit:cover;background:var(--border);transition:transform .4s ease}
+.news-card:hover .news-card-img{transform:scale(1.05)}
+.news-card-body{padding:var(--s2)}
+.news-card-source{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:6px}
+.news-card-title{font-size:.85rem;font-weight:600;line-height:1.45;margin-bottom:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.news-card-btn{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:6px;background:var(--accent-soft);border:1px solid var(--accent-border);color:var(--accent);font-size:.72rem;font-weight:600;cursor:pointer;transition:all var(--transition);text-decoration:none}
+.news-card-btn:hover{background:var(--accent);color:#fff}
+.globe-fallback{display:flex;align-items:center;justify-content:center;width:100%;height:480px;flex-direction:column;gap:var(--s2);color:var(--t3)}
+.globe-fallback svg{width:40px;height:40px;stroke-width:1.5}
+.globe-tooltip{position:absolute;display:none;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:.78rem;font-weight:600;pointer-events:none;z-index:20}
+/* LOADING */
+.loading-overlay{position:fixed;inset:0;z-index:9999;background:rgba(10,10,10,0.9);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s3)}
+html.light .loading-overlay{background:rgba(250,250,250,0.9)}
+.loading-logo{font-family:var(--font-h);font-size:2rem;font-weight:800;text-shadow:0 0 40px rgba(91,95,255,0.8),0 0 80px rgba(91,95,255,0.4);animation:logoPulse 2s ease infinite}
+@keyframes logoPulse{0%,100%{opacity:1}50%{opacity:.55}}
+.loading-ring{width:40px;height:40px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--accent);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:.82rem;color:var(--t3)}
+/* MISC */
+.demo-badge{position:fixed;top:68px;right:var(--s2);background:var(--card-bg);border:1px solid var(--amber);color:var(--amber);font-size:.68rem;font-weight:700;padding:4px 10px;border-radius:6px;z-index:1001;display:flex;align-items:center;gap:4px}
+.demo-badge svg{width:12px;height:12px}
+.share-toast{position:fixed;bottom:var(--s3);left:50%;transform:translateX(-50%) translateY(20px);background:var(--card-bg);border:1px solid var(--green);color:var(--green);padding:10px 20px;border-radius:var(--s1);font-size:.82rem;font-weight:500;opacity:0;transition:all .3s;z-index:2000;pointer-events:none}
+@media(max-width:768px){
+  body{padding-left:0;padding-top:var(--nav)}
+  .nav{transform:translateX(-100%);width:260px}
+  .nav.open{transform:translateX(0)}
+  .mobile-menu-btn{display:flex}
+  .features-grid,.home-features{grid-template-columns:1fr}
+  .compare-inputs{grid-template-columns:1fr;gap:var(--s2)}
+  .vs-divider{padding:var(--s1) 0}
+  .compare-result-grid{grid-template-columns:1fr}
+  .bento-dashboard{grid-template-columns:1fr}
+  #globe-container{height:300px!important}
+  .page{padding:var(--s3) var(--s2)}
+}
+/* 3D SCROLL ENTRANCE */
+.card-3d-enter{opacity:0;transform:perspective(800px) rotateX(10deg) translateY(20px);transition:opacity .4s ease,transform .4s ease}.card-3d-enter.in-view{opacity:1;transform:perspective(800px) rotateX(0) translateY(0)}
+/* 3D PRESS EFFECT */
+.card-press{transition:transform .15s ease!important}
+.card-press.pressing{transform:perspective(600px) scale(.97) rotateX(3deg)!important}
+</style>
+
+<style>
+/* KEYBOARD HINT */
+.kbd-hint{font-size:.72rem;color:var(--t3);display:flex;align-items:center;gap:3px;flex-wrap:wrap}
+kbd{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:.68rem;font-family:var(--font-b);font-weight:600;color:var(--t2)}
+/* SOURCE RATING */
+.source-rating-box{border:1px solid var(--border);border-radius:12px;padding:var(--s2);background:var(--bg)}
+.source-rating-head{display:flex;align-items:center;gap:6px;font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);margin-bottom:8px}
+.source-rating-row{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;font-size:.8rem}
+.tier-badge{font-size:.66rem;font-weight:700;padding:2px 8px;border-radius:4px}
+.tier-High{background:rgba(16,185,129,0.12);color:var(--green)}
+.tier-Medium{background:rgba(245,158,11,0.12);color:var(--amber)}
+.tier-Low{background:rgba(239,68,68,0.12);color:var(--red)}
+/* COMPACT SOURCE BADGE */
+.source-badge{display:inline-flex;align-items:center;gap:5px;font-size:.7rem;font-weight:600;padding:3px 10px;border-radius:6px;background:var(--bg);border:1px solid var(--border);color:var(--t2)}
+.source-badge svg{width:12px;height:12px;stroke:var(--accent)}
+.source-badge b{color:var(--t1)}
+/* TOPIC BADGE */
+.topic-badge{display:inline-flex;align-items:center;gap:5px;font-size:.7rem;font-weight:600;padding:3px 10px;border-radius:6px;background:var(--accent-soft);border:1px solid var(--accent-border);color:var(--accent)}
+.topic-badge svg{width:12px;height:12px}
+/* ANNOTATED ARTICLE */
+.annotated-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;background:none;border:none;color:var(--t1);font-family:var(--font-h);font-size:.9rem;font-weight:700;cursor:pointer;padding:0}
+.annotated-toggle svg{width:18px;height:18px;stroke:var(--t2)}
+.annotated-legend{display:flex;gap:var(--s3);flex-wrap:wrap;font-size:.74rem;color:var(--t2);margin-bottom:var(--s2)}
+.annotated-text{font-size:.88rem;line-height:1.9;color:var(--t2);max-height:400px;overflow-y:auto;padding:var(--s2);background:var(--bg);border-radius:12px;border:1px solid var(--border);white-space:pre-wrap}
+.hl-emotional{background:rgba(245,200,40,0.32);color:var(--t1);border-radius:3px;padding:1px 3px;font-weight:600}
+.hl-framing{background:rgba(245,140,40,0.32);color:var(--t1);border-radius:3px;padding:1px 3px;font-weight:600}
+/* HISTORY */
+.history-list{display:grid;gap:var(--s2);grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.history-card{border-radius:var(--r);background:var(--card-bg);border:1px solid var(--border);padding:var(--s3);cursor:pointer;transition:all var(--transition)}
+.history-card:hover{border-color:var(--border-h);box-shadow:0 2px 12px rgba(0,0,0,0.1);transform:translateY(-2px)}
+.history-time{font-size:.7rem;color:var(--t3);margin-bottom:6px}
+.history-preview{font-size:.82rem;color:var(--t1);line-height:1.5;margin-bottom:var(--s2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.history-scores{display:flex;gap:var(--s2);font-size:.74rem}
+.history-score{display:flex;align-items:center;gap:4px;color:var(--t2)}
+.history-score b{color:var(--t1)}
+/* COMPARE multi */
+.compare-inputs{display:grid;gap:var(--s2);grid-template-columns:repeat(2,1fr)}
+.compare-inputs.cols-3{grid-template-columns:repeat(3,1fr)}
+.compare-inputs textarea{width:100%;height:300px;resize:none}
+.compare-col-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--s1)}
+.compare-remove{background:none;border:none;color:var(--t3);cursor:pointer;padding:2px}
+.compare-remove:hover{color:var(--red)}
+.compare-remove svg{width:15px;height:15px}
+.compare-result-grid.cols-2{grid-template-columns:repeat(2,1fr)}
+.compare-result-grid.cols-3{grid-template-columns:repeat(3,1fr)}
+.skel-compare-grid{display:grid;gap:var(--s2);grid-template-columns:repeat(2,1fr)}
+.skel-compare-grid.cols-2{grid-template-columns:repeat(2,1fr)}
+.skel-compare-grid.cols-3{grid-template-columns:repeat(3,1fr)}
+.rank-badge{font-size:.66rem;font-weight:700;padding:2px 8px;border-radius:4px;background:var(--accent-soft);color:var(--accent)}
+@media(max-width:768px){.compare-inputs,.compare-inputs.cols-3,.skel-compare-grid,.skel-compare-grid.cols-2,.skel-compare-grid.cols-3,.compare-result-grid.cols-2,.compare-result-grid.cols-3{grid-template-columns:1fr}}
+/* PRINT */
+@media print{
+  body{padding-top:0;padding-left:0;background:#fff;color:#000}
+  .nav,.demo-badge,#share-row,#features-section,#skeleton-loader,.input-panel,#annotated-card,.share-toast,.site-footer,.mobile-menu-btn,.sidebar-overlay{display:none!important}
+  .page{display:none!important}
+  #page-analyze.active{display:block!important}
+  .page-header{display:none}
+  #print-header{display:block!important}
+  .results-grid{display:block!important}
+  .results-grid .card{opacity:1!important;transform:none!important;break-inside:avoid;page-break-inside:avoid;border:1px solid #ccc;margin-bottom:16px;box-shadow:none}
+  .card-title{color:#555!important}
+  *{color:#000!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+#print-header{display:none}
+</style>
+
+<script>
+const $=id=>document.getElementById(id);
+const inputText=$('input-text'),validationMsg=$('validation-msg'),charCount=$('char-count'),btnAnalyze=$('btn-analyze'),btnReset=$('btn-reset'),errorEl=$('error-msg'),resultsEl=$('results');
+let analyzeState={status:'idle',result:null,errorMessage:null},dashboardState={status:'idle',conflicts:[],errorMessage:null};
+
+function navigateTo(page){const next=$('page-'+page);if(!next)return;const cur=document.querySelector('.page.active');document.querySelectorAll('.nav-link').forEach(l=>l.classList.remove('active'));const nb=document.querySelector(`[data-page="${page}"]`);if(nb)nb.classList.add('active');closeSidebar();const pageInit=()=>{if(page==='dashboard'){if(dashboardState.status==='idle')loadDashboard();setTimeout(initGlobe,100);}if(page==='history')renderHistory();};const showNext=()=>{if(cur&&cur!==next){cur.classList.remove('active','page-exit');}next.classList.add('active','page-enter');setTimeout(()=>next.classList.remove('page-enter'),400);pageInit();};if(cur&&cur!==next){cur.classList.add('page-exit');setTimeout(showNext,180);}else{showNext();}}
+function closeSidebar(){const sb=$('sidebar');if(sb)sb.classList.remove('open');const ov=$('sidebar-overlay');if(ov)ov.classList.remove('show');}
+document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>navigateTo(b.dataset.page)));
+$('btn-get-started').addEventListener('click',()=>navigateTo('analyze'));
+
+let inputMode='paste';
+$('tab-paste').addEventListener('click',()=>{inputMode='paste';$('paste-mode').classList.remove('hidden');$('url-mode').classList.add('hidden');$('tab-paste').classList.add('active');$('tab-url').classList.remove('active');});
+$('tab-url').addEventListener('click',()=>{inputMode='url';$('url-mode').classList.remove('hidden');$('paste-mode').classList.add('hidden');$('tab-url').classList.add('active');$('tab-paste').classList.remove('active');});
+
+/* ===== Shared URL article fetch + extraction (used by Analyze and Compare) ===== */
+function fetchT(u,opts){const c=new AbortController();const to=setTimeout(()=>c.abort(),10000);return fetch(u,Object.assign({signal:c.signal},opts||{})).finally(()=>clearTimeout(to));}
+/* Convert HTML to line-structured block text so we can filter line-by-line */
+function htmlToLines(html){const doc=new DOMParser().parseFromString(html||'','text/html');doc.querySelectorAll('script,style,nav,footer,header,aside,iframe,form,noscript').forEach(e=>e.remove());const root=doc.querySelector('article')||doc.querySelector('main')||doc.body;if(!root)return '';const blocks=root.querySelectorAll('p,h1,h2,h3,h4,h5,h6,li,blockquote');let arr=[];if(blocks.length){blocks.forEach(b=>{const t=(b.textContent||'').trim();if(t)arr.push(t);});}else{arr=(root.textContent||'').split(/\n+/);}return arr.join('\n');}
+/* Junk-line detection: nav/menu link lists, images, boilerplate */
+function isJunk(l){if(!l)return true;
+  if(/^[*\-+]\s*\[/.test(l))return true;            /* markdown link list item (nav/menu) */
+  if(/^!\[/.test(l)||/!\[image\s*\d+/i.test(l))return true; /* markdown image / image placeholder */
+  if(/^\[[^\]]*\]\([^)]*\)$/.test(l))return true;   /* line that is purely a markdown link */
+  if(/^#{1,6}\s*\[/.test(l))return true;            /* heading that is just a link */
+  if(/^(subscribe|e-?paper|sign ?in|log ?in|register|newsletter|advertisement|advt|sponsored|read more|related (stories|articles|news|topics)|more from|you may (also )?like|recommended|follow us|share (this|on|article)|trending|most (read|popular|viewed)|download (the )?app|watch live|live updates|comments?|terms of (use|service)|privacy policy|cookies?|copyright|all rights reserved|back to top|skip to (content|main))\b/i.test(l))return true;
+  if(/^\u00a9/.test(l)||(/\u00a9/.test(l)&&l.length<60))return true;          /* copyright */
+  if(/(scorecard|tracking pixel|beacon|weather (widget|forecast|update)|stock (ticker|quote))/i.test(l))return true;
+  /* standalone wire-service image credit/caption fragments (e.g. "...waves a flag — Reuters") */
+  if(l.length<160&&/[\u2014\u2013-]\s*(reuters|afp|ap|ap photo|afp\s*\/\s*getty|getty(\s*images)?|epa|epa-efe|bloomberg|anadolu|pa media|file photo|handout|via reuters)\.?$/i.test(l))return true;
+  /* trailing publisher / reader-engagement boilerplate */
+  if(/(our readers are at the heart of everything we do|support our journalism|support independent journalism|sign up (to|for) our|subscribe to our|become a (member|subscriber|supporter)|thank you for reading|join the conversation|tell us (what you think|in the comments)|what do you think\??$|follow .* on (twitter|x|facebook|instagram)|this article was (amended|corrected|updated))/i.test(l))return true;
+  /* reader feedback / contact-us closing prompts */
+  if(/(do you have a thought to share|a way we can improve|we'?d love to hear (it|from you)|reach out to us|contact us at|get in touch|email us at|send us your (feedback|thoughts)|share your (feedback|thoughts|story))/i.test(l))return true;
+  /* isolated numeric artifact (lone digits, e.g. leftover like/comment counters) */
+  if(/^\d{1,4}$/.test(l))return true;
+  return false;}
+/* A prose line: long enough and contains sentence-ending punctuation */
+function isProse(l){return l.length>=40&&/[.!?]["')\u201d]?(\s|$)/.test(l);}
+function normalize(l){return l.replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/\[([^\]]*)\]\([^)]*\)/g,'$1').replace(/^#{1,6}\s*/,'').replace(/^>\s*/,'').replace(/^[*\-+]\s+/,'').replace(/\s+/g,' ').trim();}
+/* Extract the article body: longest contiguous block of prose (tolerating a single short heading gap) */
+function extractArticle(raw){
+  const kept=(raw||'').split(/\r?\n+/).map(s=>normalize(s)).filter(Boolean).filter(l=>!isJunk(l));
+  let best='',run=[],gap=0;
+  const flush=()=>{const s=run.join(' ').replace(/\s+/g,' ').trim();if(s.length>best.length)best=s;run=[];gap=0;};
+  for(const ln of kept){if(isProse(ln)){run.push(ln);gap=0;}else if(run.length&&ln.length<90){run.push(ln);gap++;if(gap>1)flush();}else{flush();}}
+  flush();
+  if(best.length>=100)return best;
+  return kept.filter(isProse).join(' ').replace(/\s+/g,' ').trim();
+}
+/* Fetch + extract clean article text from a URL. Returns cleaned text (<=10000 chars) or '' on failure. */
+const URL_FAIL_INDICATORS=[/Target URL returned error/i,/requiring CAPTCHA/i,/maybe requiring CAPTCHA/i,/401:\s*Unauthorized/i,/403:\s*Forbidden/i,/Please enable JS/i,/maybe not yet fully loaded/i];
+function looksLikeFetchFailure(t){t=t||'';if(URL_FAIL_INDICATORS.some(re=>re.test(t)))return true;
+  /* Jina returns "Markdown Content:" header — if almost nothing follows it, the page didn't yield real content */
+  const m=t.match(/Markdown Content:\s*([\s\S]*)$/i);if(m&&m[1].replace(/\s+/g,' ').trim().length<200)return true;
+  return false;}
+async function fetchArticleFromUrl(url){
+  const attempts=[
+    /* 1. Server-side proxy (no CORS, real browser UA) — most reliable */
+    async()=>{const r=await fetchT('/api/fetch-url?url='+encodeURIComponent(url));if(!r.ok)throw 0;const d=await r.json();if(!d.html)throw 0;return htmlToLines(d.html);},
+    /* 2. Jina AI reader — renders JS, returns clean markdown */
+    async()=>{const r=await fetchT('https://r.jina.ai/'+url);if(!r.ok)throw 0;return await r.text();},
+    /* 3-4. Generic CORS proxies */
+    async()=>{const r=await fetchT('https://api.allorigins.win/raw?url='+encodeURIComponent(url));if(!r.ok)throw 0;return htmlToLines(await r.text());},
+    async()=>{const r=await fetchT('https://api.allorigins.win/get?url='+encodeURIComponent(url));if(!r.ok)throw 0;const d=await r.json();return htmlToLines(d.contents);},
+    async()=>{const r=await fetchT('https://corsproxy.io/?url='+encodeURIComponent(url));if(!r.ok)throw 0;return htmlToLines(await r.text());},
+    async()=>{const r=await fetchT('https://thingproxy.freeboard.io/fetch/'+url);if(!r.ok)throw 0;return htmlToLines(await r.text());}
+  ];
+  for(const attempt of attempts){try{const raw=await attempt();if(looksLikeFetchFailure(raw))continue;const art=extractArticle(raw);if(art&&!looksLikeFetchFailure(art)&&art.length>=100)return art.length>10000?art.substring(0,10000):art;}catch(e){}}
+  return '';
+}
+const URL_FAIL_MSG='This source actively blocks automated reading. Please copy the article text manually and use Paste Text instead.';
+
+$('btn-fetch-url').addEventListener('click',async()=>{const url=$('url-input').value.trim();const setS=(m,c)=>{$('url-status').textContent=m;$('url-status').style.color=c;};if(!url||!url.startsWith('http')){setS('Enter valid URL','var(--red)');return;}setS('Fetching...','var(--t3)');$('btn-fetch-url').disabled=true;const text=await fetchArticleFromUrl(url);if(text){$('url-content').value=text;setS(text.length.toLocaleString()+' chars extracted','var(--green)');}else{$('url-content').value='';setS(URL_FAIL_MSG,'var(--red)');}$('btn-fetch-url').disabled=false;});
+
+function getAnalyzeText(){return inputMode==='url'?$('url-content').value.trim():inputText.value.trim();}
+function countryCodeToFlag(c){if(!c||c.length!==2)return '';const u=c.toUpperCase(),a=u.charCodeAt(0),b=u.charCodeAt(1);if(a<65||a>90||b<65||b>90)return '';return String.fromCodePoint(0x1F1E6-65+a)+String.fromCodePoint(0x1F1E6-65+b)}
+function getBiasZone(s){return s<-20?'blue':s>20?'red':'grey'}
+function validateInput(t){if(t.length<3)return{valid:false,msg:'Min 3 characters'};if(t.length>10000)return{valid:false,msg:'Max 10,000 characters'};return{valid:true,msg:''}}
+function escapeHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+
+async function callAnalyzeAPI(input,mode){try{const r=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input,mode})});const d=await r.json();if(r.ok&&d.data){hideDemoBadge();return d.data;}showDemoBadge();return null;}catch(e){showDemoBadge();return null;}}
+
+function getMockAnalysis(text){
+  const pick=a=>a[Math.floor(Math.random()*a.length)];
+  const topics=[{k:'ukraine',b:-15},{k:'china',b:12},{k:'israel',b:25},{k:'climate',b:-35},{k:'trump',b:42},{k:'russia',b:-8},{k:'pakistan',b:-10}];
+  const m=topics.find(t=>text.toLowerCase().includes(t.k));const bs=m?m.b:Math.floor(Math.random()*60)-30;
+  const rationales=[
+    "Analysis detected moderate framing through selective emphasis. Language choices suggest editorial lean, though core facts are largely accurate.",
+    "Coverage leans on emotionally weighted terms and one-sided sourcing, while omitting counterpoints that would temper the conclusion.",
+    "Framing relies on a narrow set of official sources; factual claims hold up but context is curated to favor a particular reading.",
+    "Tone is largely measured with mostly verifiable claims, though headline emphasis and quote selection nudge interpretation."
+  ];
+  const factsVariants=[
+    [{heading:"Economic civilian impact",description:"Effects on local economies and basic services not addressed."},{heading:"Pre-2020 historical context",description:"Key historical grievances informing current tensions absent."},{heading:"Diplomatic back-channels",description:"Quiet negotiations between parties not covered."},{heading:"Regional allies shifting",description:"Neighboring countries' stance changes not reflected."},{heading:"Humanitarian agreements",description:"Recent aid delivery accords missing from coverage."}],
+    [{heading:"Funding sources",description:"Who finances the involved actors is left unexamined."},{heading:"Dissenting expert voices",description:"Analysts disagreeing with the dominant narrative are absent."},{heading:"Long-term casualty data",description:"Cumulative human cost over time is not quantified."},{heading:"Legal framework",description:"Relevant international law and treaty obligations go unmentioned."},{heading:"Civilian testimony",description:"On-the-ground accounts from affected populations are missing."}],
+    [{heading:"Supply chain effects",description:"Downstream impact on trade and commodities is omitted."},{heading:"Prior negotiation failures",description:"Earlier collapsed talks that shape current distrust are skipped."},{heading:"Domestic political drivers",description:"Internal pressures motivating each side are unexplored."},{heading:"Environmental consequences",description:"Ecological damage and displacement are not discussed."},{heading:"Minority/ethnic dimensions",description:"Impact on minority groups is left out of the framing."}],
+    [{heading:"Comparative precedent",description:"Similar past situations that inform outcomes are ignored."},{heading:"Third-party mediators",description:"Roles of neutral brokers and NGOs are underreported."},{heading:"Economic sanctions detail",description:"Specific measures and their real-world effect are vague."},{heading:"Media access limits",description:"Restrictions on independent reporting are not disclosed."},{heading:"Refugee and migration data",description:"Displacement figures and host-country strain are absent."}]
+  ];
+  const conflictVariants=[
+    {historicalSummary:"Roots in post-Cold War realignments and unresolved territorial disputes. Multiple peace agreements attempted with varying success. Current escalation represents convergence of long-standing grievances and shifting alliance structures.",keyPlayers:[{name:"UN Security Council",role:"Primary international body for conflict resolution"},{name:"Regional Economic Community",role:"Mediating trade disputes and dialogue"},{name:"Opposition Coalition",role:"Representing displaced populations"},{name:"International Court of Justice",role:"Adjudicating territorial claims"}]},
+    {historicalSummary:"Tensions trace back to contested borders and competition over resources, repeatedly inflamed by external interventions. Periods of fragile calm have alternated with flare-ups as power balances shift.",keyPlayers:[{name:"Major Powers Bloc",role:"Backing rival sides with arms and aid"},{name:"Regional Mediator State",role:"Hosting and brokering negotiations"},{name:"Humanitarian Agencies",role:"Coordinating relief and access"},{name:"Local Civil Society",role:"Documenting abuses and pressing for accountability"}]},
+    {historicalSummary:"The dispute is rooted in colonial-era boundaries and identity-based divisions that later hardened into political fault lines. Economic interdependence has complicated efforts at a durable settlement.",keyPlayers:[{name:"Transitional Authority",role:"Administering contested governance"},{name:"International Donors",role:"Conditioning aid on reforms"},{name:"Armed Factions",role:"Controlling territory and resources"},{name:"Diaspora Networks",role:"Shaping narratives and funding"}]}
+  ];
+  const predictionVariants=[
+    {primaryOutcome:"Diplomatic negotiations will likely intensify over the next 3-6 months, with a ceasefire agreement possible by mid-year.",confidencePercent:Math.floor(Math.random()*20)+55,alternativeScenarios:[{description:"Escalation through proxy involvement could derail talks."},{description:"Back-channel breakthrough could accelerate resolution."},{description:"Economic pressures may force pragmatic compromise."}],disclaimer:"AI-generated estimates, not guaranteed outcomes."},
+    {primaryOutcome:"A prolonged stalemate is the most probable path, with intermittent flare-ups but no decisive resolution within the year.",confidencePercent:Math.floor(Math.random()*20)+50,alternativeScenarios:[{description:"International mediation could freeze the conflict along current lines."},{description:"A leadership change on either side could reset negotiations."},{description:"Renewed sanctions could shift the cost-benefit calculus."}],disclaimer:"AI-generated estimates, not guaranteed outcomes."},
+    {primaryOutcome:"Conditions point toward gradual de-escalation as economic strain and external pressure push parties toward limited agreements.",confidencePercent:Math.floor(Math.random()*20)+58,alternativeScenarios:[{description:"A spoiler faction could undermine partial agreements."},{description:"Humanitarian crises could force an expedited truce."},{description:"Great-power rivalry could entrench the status quo."}],disclaimer:"AI-generated estimates, not guaranteed outcomes."}
+  ];
+  return{
+    biasScore:bs,
+    biasRationale:pick(rationales),
+    credibilityScore:Math.floor(Math.random()*30)+55,
+    emotionalLanguage:Math.floor(Math.random()*40)+20,
+    sourceBalance:Math.floor(Math.random()*30)+40,
+    factualDensity:Math.floor(Math.random()*25)+50,
+    missingFacts:pick(factsVariants),
+    conflictBackground:pick(conflictVariants),
+    aiPrediction:pick(predictionVariants)
+  };
+}
+
+function getMockNews(){const all=[{title:"Global leaders convene emergency climate summit amid record temperatures",source:"Reuters"},{title:"EU parliament advances comprehensive AI regulation framework",source:"BBC News"},{title:"Central banks signal coordinated rate decisions for Q3",source:"Financial Times"},{title:"Nuclear fusion energy breakthrough announced by consortium",source:"Nature"},{title:"Naval exercises expand in contested maritime waters",source:"Al Jazeera"},{title:"Extreme weather disrupts global food supply chains",source:"AP News"},{title:"Cybersecurity alliance formed between 30 nations",source:"The Guardian"},{title:"Space agencies collaborate on asteroid defense initiative",source:"CNN"},{title:"New trade corridor opens between South Asia and Central Asia",source:"Reuters"},{title:"Global semiconductor shortage eases as new fabs come online",source:"Bloomberg"},{title:"UN report warns of accelerating biodiversity loss",source:"BBC News"},{title:"Quantum computing milestone reached by research consortium",source:"Nature"}];const shuffled=[...all].sort(()=>Math.random()-0.5);const ts=Date.now();return shuffled.slice(0,8).map((a,i)=>({...a,url:'#',image:`https://picsum.photos/seed/${ts+i}/400/220`}))}
+
+function showDemoBadge(){$('demo-badge').classList.remove('hidden');}
+function hideDemoBadge(){$('demo-badge').classList.add('hidden');}
+
+let currentAnalysisInput='';
+
+/* ===== SOURCE CREDIBILITY DATABASE ===== */
+const SOURCE_DB={
+  "BBC":{bias:-5,tier:"High"},"CNN":{bias:-32,tier:"Medium"},"Fox News":{bias:48,tier:"Medium"},
+  "Al Jazeera":{bias:-18,tier:"Medium"},"Reuters":{bias:2,tier:"High"},"Associated Press":{bias:-3,tier:"High"},
+  "AP News":{bias:-3,tier:"High"},"The New York Times":{bias:-28,tier:"High"},"New York Times":{bias:-28,tier:"High"},
+  "The Washington Post":{bias:-30,tier:"High"},"Washington Post":{bias:-30,tier:"High"},"The Guardian":{bias:-35,tier:"High"},
+  "The Wall Street Journal":{bias:18,tier:"High"},"Wall Street Journal":{bias:18,tier:"High"},"Bloomberg":{bias:-8,tier:"High"},
+  "Financial Times":{bias:-6,tier:"High"},"The Economist":{bias:-10,tier:"High"},"NPR":{bias:-22,tier:"High"},
+  "MSNBC":{bias:-55,tier:"Low"},"Breitbart":{bias:78,tier:"Low"},"The Daily Wire":{bias:62,tier:"Low"},
+  "HuffPost":{bias:-58,tier:"Low"},"Huffington Post":{bias:-58,tier:"Low"},"Vox":{bias:-42,tier:"Medium"},
+  "Politico":{bias:-15,tier:"High"},"The Hill":{bias:3,tier:"Medium"},"Newsmax":{bias:70,tier:"Low"},
+  "The New Yorker":{bias:-45,tier:"Medium"},"USA Today":{bias:-12,tier:"High"},"Sky News":{bias:-4,tier:"Medium"},
+  "RT":{bias:35,tier:"Low"},"CNBC":{bias:-7,tier:"High"},"ABC News":{bias:-14,tier:"High"},
+  "CBS News":{bias:-16,tier:"High"},"NBC News":{bias:-20,tier:"Medium"},"Time":{bias:-25,tier:"Medium"},
+  "Forbes":{bias:8,tier:"Medium"},"The Telegraph":{bias:22,tier:"Medium"},
+  "Xinhua":{bias:40,tier:"Low"},"Dawn":{bias:-12,tier:"Medium"},"The Hindu":{bias:-16,tier:"Medium"},
+  "Times of India":{bias:10,tier:"Medium"},"South China Morning Post":{bias:6,tier:"Medium"}
+};
+function detectSource(text){const lower=text.toLowerCase();let best=null;
+/* prioritise attribution phrases like "Reuters reports", "(Reuters)", "© Reuters", "according to BBC" */
+for(const name in SOURCE_DB){const n=name.toLowerCase();const attrib=[n+' reports',n+' reported','('+n+')','\u00a9 '+n,'according to '+n,'via '+n,n+' said'];if(attrib.some(p=>lower.includes(p))){if(!best||name.length>best.length)best=name;}}
+if(best)return best;
+for(const name in SOURCE_DB){if(lower.includes(name.toLowerCase())){if(!best||name.length>best.length)best=name;}}return best;}
+function leanLabel(b){return b<-20?'Left':b>20?'Right':'Center';}
+
+/* ===== BIAS HIGHLIGHT KEYWORDS ===== */
+const EMOTIONAL_WORDS=["devastating","shocking","horrific","outrageous","disgraceful","tragic","catastrophic","alarming","terrifying","explosive","stunning","bombshell","furious","appalling","unprecedented","chaos","crisis","disaster","nightmare","desperate","brutal","savage","heartbreaking"];
+const FRAMING_WORDS=["slammed","blasted","controversial","so-called","claimed","alleged","refused to","admitted","forced to","failed to","radical","extremist","regime","propaganda","mouthpiece","cronies","blasting","lashed out","doubled down","insisted","dismissed"];
+function cleanReadable(t){return (t||'')
+  .replace(/!\[[^\]]*\]\([^)]*\)/g,'')                 /* inline markdown images */
+  .replace(/\[([^\]]*)\]\([^)]*\)/g,'$1')              /* inline links -> display text (also drops empty permalink anchors) */
+  .replace(/[\u2014\u2013-]\s*(Reuters|AFP|AP Photo|AP|AFP\s*\/\s*Getty|Getty(?:\s*Images)?|EPA(?:-EFE)?|Bloomberg|Anadolu|PA Media|File photo|Handout|via Reuters)\.?(?=\s|$)/gi,'') /* inline wire-service photo credits */
+  .replace(/\s{2,}/g,' ')
+  .trim();}
+function annotateText(text){let escaped=escapeHtml(cleanReadable(text));const wrap=(words,cls)=>{words.forEach(w=>{const re=new RegExp('\\b('+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')\\b','gi');escaped=escaped.replace(re,'<span class="'+cls+'">$1</span>');});};wrap(EMOTIONAL_WORDS,'hl-emotional');wrap(FRAMING_WORDS,'hl-framing');return escaped;}
+
+/* ===== HISTORY ===== */
+function getHistory(){try{return JSON.parse(localStorage.getItem('clearlens_history')||'[]');}catch(e){return [];}}
+function saveToHistory(input,result){const hist=getHistory();hist.unshift({ts:Date.now(),preview:input.slice(0,160),input,result,bias:result.biasScore,cred:result.credibilityScore});localStorage.setItem('clearlens_history',JSON.stringify(hist.slice(0,20)));}
+function renderHistory(){const hist=getHistory();const list=$('history-list'),empty=$('history-empty');if(!hist.length){empty.classList.remove('hidden');list.innerHTML='';return;}empty.classList.add('hidden');list.innerHTML=hist.map((h,i)=>{const z=getBiasZone(h.bias);const zc=z==='blue'?'var(--blue)':z==='red'?'var(--red)':'var(--t2)';return`<div class="history-card" data-hidx="${i}"><div class="history-time">${new Date(h.ts).toLocaleString()}</div><div class="history-preview">${escapeHtml(h.preview)}${h.preview.length>=160?'\u2026':''}</div><div class="history-scores"><span class="history-score">Bias: <b style="color:${zc}">${h.bias>0?'+':''}${h.bias}</b></span><span class="history-score">Credibility: <b>${h.cred}/100</b></span></div></div>`;}).join('');list.querySelectorAll('.history-card').forEach(card=>card.addEventListener('click',()=>{const h=getHistory()[+card.dataset.hidx];if(!h)return;currentAnalysisInput=h.input||'';inputText.value=h.input||'';charCount.textContent=(h.input||'').length.toLocaleString()+' / 10,000';analyzeState={status:'success',result:h.result,errorMessage:null};navigateTo('analyze');updateUI();}));}
+function renderSourceRating(text,detectedBias){const src=detectSource(text);const box=$('source-rating');const badge=$('source-badge');if(!src){box.classList.add('hidden');box.innerHTML='';badge.classList.add('hidden');badge.innerHTML='';return;}const info=SOURCE_DB[src];const lean=leanLabel(info.bias);badge.classList.remove('hidden');badge.innerHTML=`<i data-lucide="building-2"></i> Source: <b>${escapeHtml(src)}</b> — Historically ${lean}-leaning`;const diff=Math.abs(info.bias-detectedBias);const note=diff<15?'closely matches':diff<35?'somewhat differs from':'differs significantly from';box.classList.remove('hidden');box.innerHTML=`<div class="source-rating-box"><div class="source-rating-head"><i data-lucide="building-2" style="width:13px;height:13px"></i> Historical Source Rating</div><div class="source-rating-row"><b>${escapeHtml(src)}</b><span class="tier-badge tier-${info.tier}">${info.tier} reliability</span><span style="color:var(--t2)">Typical bias: <b style="color:var(--t1)">${info.bias>0?'+':''}${info.bias}</b> (${lean})</span></div><div style="font-size:.76rem;color:var(--t3);margin-top:8px">This article's detected bias (${detectedBias>0?'+':''}${detectedBias}) ${note} ${escapeHtml(src)}'s historical average (${info.bias>0?'+':''}${info.bias}).</div></div>`;if(typeof lucide!=='undefined')lucide.createIcons();}
+function renderAnnotated(text){const body=$('annotated-text');if(!text){$('annotated-card').classList.add('hidden');return;}$('annotated-card').classList.remove('hidden');body.innerHTML=annotateText(text);}
+
+function revealCards(){resultsEl.querySelectorAll('.card').forEach((c,i)=>{c.classList.remove('revealed');c.style.animationDelay=`${i*120}ms`;});requestAnimationFrame(()=>{resultsEl.querySelectorAll('.card').forEach(c=>c.classList.add('revealed'));});}
+
+function animateBias(target){const el=$('bias-number');const colors={blue:'#60a5fa',grey:getComputedStyle(document.documentElement).getPropertyValue('--t1').trim(),red:'#f87171'};el.style.color=colors[getBiasZone(target)];let cur=0;const dur=1200,st=performance.now();(function tick(now){const p=Math.min((now-st)/dur,1);cur=Math.round((1-Math.pow(1-p,3))*target);el.textContent=(cur>0?'+':'')+cur;if(p<1)requestAnimationFrame(tick);else el.textContent=(target>0?'+':'')+target;})(performance.now());}
+
+function renderCred(r){const s=r.credibilityScore||65,em=r.emotionalLanguage||30,sb=r.sourceBalance||55,fd=r.factualDensity||60;const circ=2*Math.PI*42,off=circ-(s/100)*circ;const sc=s>=70?'var(--green)':s>=40?'var(--amber)':'var(--red)';$('credibility-content').innerHTML=`<div class="cred-gauge"><svg width="90" height="90"><circle cx="45" cy="45" r="42" fill="none" stroke="var(--border)" stroke-width="6"/><circle class="cred-ring" cx="45" cy="45" r="42" fill="none" stroke="${sc}" stroke-width="6" stroke-dasharray="${circ}" stroke-linecap="round" style="--circ:${circ};--off:${off};stroke-dashoffset:${off}"/></svg><div class="cred-gauge-text" id="cred-num" style="color:${sc}">0</div></div><div class="cred-factor"><span class="cred-factor-label">Emotional Language</span><div class="cred-factor-bar"><div class="cred-factor-fill" style="width:${100-em}%;background:${em>60?'var(--red)':em>30?'var(--amber)':'var(--green)'}"></div></div><span class="cred-factor-val" style="color:${em>60?'var(--red)':em>30?'var(--amber)':'var(--green)'}">${100-em}%</span></div><div class="cred-factor"><span class="cred-factor-label">Source Balance</span><div class="cred-factor-bar"><div class="cred-factor-fill" style="width:${sb}%;background:${sb>=60?'var(--green)':sb>=35?'var(--amber)':'var(--red)'}"></div></div><span class="cred-factor-val" style="color:${sb>=60?'var(--green)':sb>=35?'var(--amber)':'var(--red)'}">${sb}%</span></div><div class="cred-factor"><span class="cred-factor-label">Factual Density</span><div class="cred-factor-bar"><div class="cred-factor-fill" style="width:${fd}%;background:${fd>=60?'var(--green)':fd>=35?'var(--amber)':'var(--red)'}"></div></div><span class="cred-factor-val" style="color:${fd>=60?'var(--green)':fd>=35?'var(--amber)':'var(--red)'}">${fd}%</span></div>`;const numEl=$('cred-num');if(numEl){let cur=0;const dur=1500,st=performance.now();(function tick(now){const p=Math.min((now-st)/dur,1);numEl.textContent=Math.round((1-Math.pow(1-p,3))*s);if(p<1)requestAnimationFrame(tick);else numEl.textContent=s;})(performance.now());}}
+
+function renderResults(r){const z=getBiasZone(r.biasScore);const zl={blue:'Left-leaning',grey:'Neutral',red:'Right-leaning'};$('bias-badge').textContent=zl[z];$('bias-badge').style.cssText=`font-size:.7rem;font-weight:700;padding:3px 10px;border-radius:5px;background:var(--accent-soft);color:var(--accent)`;const ind=$('bias-indicator');ind.style.left='50%';const _zc={blue:'#60a5fa',grey:'#9ca3af',red:'#f87171'}[z];ind.style.backgroundColor=_zc;ind.style.color=_zc;requestAnimationFrame(()=>requestAnimationFrame(()=>{ind.style.left=((r.biasScore+100)/200)*100+'%';}));animateBias(r.biasScore);$('bias-rationale').textContent=r.biasRationale||'';renderCred(r);$('facts-list').innerHTML=r.missingFacts.map((f,i)=>`<li class="fact-item" style="animation-delay:${i*80}ms"><span style="flex-shrink:0;width:22px;height:22px;border-radius:6px;background:var(--accent-soft);color:var(--accent);font-size:.68rem;font-weight:700;display:flex;align-items:center;justify-content:center">${i+1}</span><div><div style="font-size:.84rem;font-weight:600;margin-bottom:2px">${escapeHtml(f.heading)}</div><div style="font-size:.78rem;color:var(--t2)">${escapeHtml(f.description)}</div></div></li>`).join('');$('conflict-summary').textContent=r.conflictBackground?.historicalSummary||'';$('players-list').innerHTML=(r.conflictBackground?.keyPlayers||[]).map(p=>`<div style="display:flex;gap:var(--s1);align-items:baseline;margin-bottom:6px"><span style="font-size:.83rem;font-weight:600">${escapeHtml(p.name)}</span><span style="font-size:.76rem;color:var(--t3)">\u2014 ${escapeHtml(p.role)}</span></div>`).join('');$('prediction-outcome').textContent=r.aiPrediction?.primaryOutcome||'';const conf=r.aiPrediction?.confidencePercent||0;$('confidence-fill').style.width='0%';$('confidence-pct').textContent=conf+'%';requestAnimationFrame(()=>requestAnimationFrame(()=>{$('confidence-fill').style.width=conf+'%';}));$('scenarios-list').innerHTML=(r.aiPrediction?.alternativeScenarios||[]).map(s=>`<div style="font-size:.8rem;color:var(--t2);padding:var(--s1) var(--s2);border-left:2px solid var(--accent);margin-bottom:var(--s1);border-radius:0 6px 6px 0;background:var(--accent-soft)">${escapeHtml(s.description)}</div>`).join('');$('prediction-disclaimer').textContent=r.aiPrediction?.disclaimer||'';renderSourceRating(currentAnalysisInput||'',r.biasScore);renderAnnotated(currentAnalysisInput||'');const _src=(currentAnalysisInput||'').trim();const _sentences=(_src.match(/[.!?]/g)||[]).length;const _isTopic=_src.length<100&&_sentences<2;const _tb=$('topic-badge');if(_tb){if(_isTopic){_tb.classList.remove('hidden');_tb.innerHTML='<i data-lucide="info"></i> Topic-based general analysis';}else{_tb.classList.add('hidden');_tb.innerHTML='';}}const pm=$('print-meta');if(pm)pm.textContent='Generated '+new Date().toLocaleString()+' · Bias '+(r.biasScore>0?'+':'')+r.biasScore+' · Credibility '+r.credibilityScore+'/100';if(typeof lucide!=='undefined')lucide.createIcons();revealCards();}
+
+function updateUI(){const ld=analyzeState.status==='loading';btnAnalyze.disabled=ld;btnReset.disabled=ld;$('loading-overlay').classList.toggle('hidden',!ld);$('skeleton-loader').classList.toggle('hidden',!ld);errorEl.classList.toggle('hidden',analyzeState.status!=='error');resultsEl.classList.toggle('hidden',analyzeState.status!=='success');$('share-row').classList.toggle('hidden',analyzeState.status!=='success');$('features-section').classList.toggle('hidden',analyzeState.status==='success'||ld);if(analyzeState.status==='error')errorEl.textContent=analyzeState.errorMessage||'Error';if(analyzeState.status==='success'&&analyzeState.result)renderResults(analyzeState.result);}
+
+inputText.addEventListener('input',()=>{charCount.textContent=`${inputText.value.length.toLocaleString()} / 10,000`;});
+btnAnalyze.addEventListener('click',async()=>{const text=getAnalyzeText();const v=validateInput(text);validationMsg.textContent=v.msg;if(!v.valid)return;currentAnalysisInput=text;const mode=text.trim().length<100?'topic':'article';analyzeState={status:'loading',result:null,errorMessage:null};updateUI();try{let r=await callAnalyzeAPI(text,mode);if(!r){await new Promise(x=>setTimeout(x,1300+Math.random()*700));r=getMockAnalysis(text);}analyzeState={status:'success',result:r,errorMessage:null};}catch(e){await new Promise(x=>setTimeout(x,800));showDemoBadge();analyzeState={status:'success',result:getMockAnalysis(text),errorMessage:null};}if(analyzeState.result)saveToHistory(text,analyzeState.result);updateUI();});
+btnReset.addEventListener('click',()=>{analyzeState={status:'idle',result:null,errorMessage:null};currentAnalysisInput='';inputText.value='';validationMsg.textContent='';charCount.textContent='0 / 10,000';$('url-input').value='';$('url-content').value='';$('url-status').textContent='';$('tab-paste').click();updateUI();inputText.focus();});
+inputText.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter')btnAnalyze.click();if(e.key==='Escape'){e.preventDefault();btnReset.click();}});
+function toast(msg){const t=$('share-toast');t.textContent=msg;t.style.opacity='1';t.style.transform='translateX(-50%) translateY(0)';setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(-50%) translateY(20px)';},2200);}
+
+function downloadPDF(r){
+  const jspdf=window.jspdf;if(!jspdf||!jspdf.jsPDF){toast('PDF library unavailable');return;}
+  const doc=new jspdf.jsPDF({unit:'pt',format:'a4'});
+  const PW=doc.internal.pageSize.getWidth(),PH=doc.internal.pageSize.getHeight();
+  const M=44,CW=PW-M*2;let y=M;
+  const BG=[13,17,23],CARD=[22,27,34],CARD2=[30,36,46],BORD=[48,54,64],TX=[230,237,243],SUB=[200,208,218],MUT=[139,148,158],ACC=[91,95,255];
+  const BLUE=[96,165,250],RED=[239,68,68],AMBER=[245,158,11],GREEN=[16,185,129],GREY=[139,148,158];
+  const dateStr=new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
+  const fill=c=>doc.setFillColor(c[0],c[1],c[2]);const stroke=c=>doc.setDrawColor(c[0],c[1],c[2]);const setText=c=>doc.setTextColor(c[0],c[1],c[2]);
+  const lh=s=>s*1.34;
+  function paintBg(){fill(BG);doc.rect(0,0,PW,PH,'F');}
+  function footer(){stroke(BORD);doc.setLineWidth(.5);doc.line(M,PH-34,PW-M,PH-34);doc.setFont('helvetica','normal');doc.setFontSize(8);setText(MUT);doc.text('Generated by ClearLens',M,PH-20);doc.text(dateStr,PW-M,PH-20,{align:'right'});}
+  function ensure(h){if(y+h>PH-46){footer();doc.addPage();paintBg();y=M;}}
+  function lines(t,size,w){doc.setFontSize(size);return doc.splitTextToSize((t||'').toString(),w);}
+  function header(t){ensure(28);fill(ACC);doc.roundedRect(M,y-9,3.5,16,1.5,1.5,'F');doc.setFont('helvetica','bold');doc.setFontSize(11);setText(TX);doc.text(t.toUpperCase(),M+12,y+3);y+=24;}
+  function paragraph(t,size,color,gap,style){const ls=lines(t,size,CW);doc.setFont('helvetica',style||'normal');setText(color);ls.forEach(ln=>{ensure(lh(size));doc.text(ln,M,y);y+=lh(size);});doc.setFont('helvetica','normal');y+=(gap||0);}
+  paintBg();
+
+  /* Header / logo */
+  fill(ACC);doc.roundedRect(M,y,30,30,7,7,'F');doc.setFont('helvetica','bold');doc.setFontSize(17);setText([255,255,255]);doc.text('C',M+15,y+21,{align:'center'});
+  setText(TX);doc.setFontSize(20);doc.text('ClearLens',M+40,y+14);doc.setFont('helvetica','normal');doc.setFontSize(9);setText(MUT);doc.text('Intelligence Report',M+40,y+27);
+  y+=50;
+
+  /* Topic */
+  const topic=(currentAnalysisInput||'').replace(/\s+/g,' ').trim()||'Untitled analysis';const isTopic=topic.length<100;
+  doc.setFont('helvetica','bold');setText(TX);lines(topic.slice(0,260)+(topic.length>260?'...':''),13,CW).forEach(ln=>{ensure(18);doc.text(ln,M,y);y+=18;});
+  if(isTopic){doc.setFont('helvetica','italic');doc.setFontSize(9);setText(ACC);ensure(14);doc.text('Topic-based general analysis',M,y);y+=14;doc.setFont('helvetica','normal');}
+  y+=10;
+
+  /* Media Bias — gauge */
+  header('Media Bias Score');
+  const z=getBiasZone(r.biasScore);const zCol=z==='blue'?BLUE:z==='red'?RED:GREY;const zl={blue:'Left-leaning',grey:'Neutral',red:'Right-leaning'}[z];
+  ensure(58);
+  doc.setFont('helvetica','bold');doc.setFontSize(24);setText(zCol);doc.text((r.biasScore>0?'+':'')+r.biasScore,M,y+10);
+  doc.setFont('helvetica','bold');doc.setFontSize(11);setText(TX);doc.text(zl,M+82,y+2);
+  doc.setFont('helvetica','normal');doc.setFontSize(8.5);setText(MUT);doc.text('Scale -100 (Left) to +100 (Right)',M+82,y+14);
+  y+=24;const barY=y,barH=9;
+  fill(BLUE);doc.roundedRect(M,barY,CW*0.4,barH,2,2,'F');fill(GREY);doc.rect(M+CW*0.4,barY,CW*0.2,barH,'F');fill(RED);doc.roundedRect(M+CW*0.6,barY,CW*0.4,barH,2,2,'F');
+  const mx=M+((r.biasScore+100)/200)*CW;fill([255,255,255]);doc.circle(mx,barY+barH/2,5.5,'F');fill(zCol);doc.circle(mx,barY+barH/2,3,'F');
+  y+=barH+8;doc.setFontSize(7.5);setText(MUT);doc.text('Left',M,y);doc.text('Center',M+CW/2,y,{align:'center'});doc.text('Right',M+CW,y,{align:'right'});y+=14;
+  if(r.biasRationale)paragraph(r.biasRationale,9.5,MUT,10);
+
+  /* Credibility — ring + factor bars */
+  header('Credibility Assessment');
+  const cred=r.credibilityScore||0;const credCol=cred>=70?GREEN:cred>=40?AMBER:RED;
+  ensure(78);
+  const cx=M+30,cy=y+30,cr=25;
+  stroke(BORD);doc.setLineWidth(5);doc.circle(cx,cy,cr,'S');stroke(credCol);doc.setLineWidth(5);doc.circle(cx,cy,cr,'S');
+  doc.setFont('helvetica','bold');doc.setFontSize(15);setText(TX);doc.text(String(cred),cx,cy+2,{align:'center'});doc.setFont('helvetica','normal');doc.setFontSize(7);setText(MUT);doc.text('/100',cx,cy+12,{align:'center'});
+  const fx=M+80,fw=CW-80;let fy=y+8;
+  const em=r.emotionalLanguage||0,sb=r.sourceBalance||0,fd=r.factualDensity||0;
+  function factor(label,val,col){doc.setFont('helvetica','normal');doc.setFontSize(8.5);setText(MUT);doc.text(label,fx,fy);doc.setFont('helvetica','bold');setText(col);doc.text(val+'%',fx+fw,fy,{align:'right'});const bgy=fy+4;fill(CARD2);doc.roundedRect(fx,bgy,fw,6,3,3,'F');fill(col);doc.roundedRect(fx,bgy,Math.max(4,fw*val/100),6,3,3,'F');fy+=22;}
+  factor('Emotional Language',100-em,em>60?RED:em>30?AMBER:GREEN);
+  factor('Source Balance',sb,sb>=60?GREEN:sb>=35?AMBER:RED);
+  factor('Factual Density',fd,fd>=60?GREEN:fd>=35?AMBER:RED);
+  y=Math.max(y+78,fy)+2;
+
+  /* Missing Facts — numbered cards */
+  if(Array.isArray(r.missingFacts)&&r.missingFacts.length){header('Missing Facts');const pad=12,badge=20,tw=CW-pad*2-badge-8;
+    r.missingFacts.forEach((f,i)=>{const hl=lines(f.heading||'',10.5,tw);const dl=f.description?lines(f.description,9,tw):[];const boxH=pad+hl.length*lh(10.5)+(dl.length?4+dl.length*lh(9):0)+pad-6;ensure(boxH+8);
+      fill(CARD2);doc.roundedRect(M,y,CW,boxH,8,8,'F');fill(ACC);doc.roundedRect(M+pad,y+pad-2,badge,badge,5,5,'F');doc.setFont('helvetica','bold');doc.setFontSize(10);setText([255,255,255]);doc.text(String(i+1),M+pad+badge/2,y+pad+badge/2+1.5,{align:'center'});
+      let ty=y+pad+7;const tx=M+pad+badge+8;doc.setFont('helvetica','bold');doc.setFontSize(10.5);setText(TX);hl.forEach(ln=>{doc.text(ln,tx,ty);ty+=lh(10.5);});if(dl.length){ty+=2;doc.setFont('helvetica','normal');doc.setFontSize(9);setText(MUT);dl.forEach(ln=>{doc.text(ln,tx,ty);ty+=lh(9);});}
+      y+=boxH+8;});}
+
+  /* Conflict Background — bordered box */
+  if(r.conflictBackground){header('Conflict Background & Key Players');const pad=12,innerW=CW-pad*2;
+    const sl=r.conflictBackground.historicalSummary?lines(r.conflictBackground.historicalSummary,9.5,innerW):[];
+    const players=r.conflictBackground.keyPlayers||[];const plLines=players.map(p=>lines('-  '+(p.name||'')+'  ('+(p.role||'')+')',9,innerW));
+    let plH=0;plLines.forEach(a=>plH+=a.length*lh(9));
+    const boxH=pad+sl.length*lh(9.5)+(players.length?10+plH:0)+pad-4;ensure(boxH+8);
+    fill(CARD);stroke(BORD);doc.setLineWidth(.7);doc.roundedRect(M,y,CW,boxH,8,8,'FD');
+    let ty=y+pad+6;doc.setFont('helvetica','normal');doc.setFontSize(9.5);setText(SUB);sl.forEach(ln=>{doc.text(ln,M+pad,ty);ty+=lh(9.5);});
+    if(players.length){ty+=6;doc.setFontSize(9);setText(MUT);plLines.forEach(a=>{a.forEach(ln=>{doc.text(ln,M+pad,ty);ty+=lh(9);});});}
+    y+=boxH+8;}
+
+  /* AI Prediction — confidence bar + scenario boxes */
+  if(r.aiPrediction){header('Predictive Analysis');const ap=r.aiPrediction;
+    if(ap.primaryOutcome)paragraph(ap.primaryOutcome,11,TX,6,'bold');
+    const pct=ap.confidencePercent||0;const pCol=pct>=66?GREEN:pct>=33?AMBER:RED;ensure(26);
+    doc.setFont('helvetica','normal');doc.setFontSize(8.5);setText(MUT);doc.text('Confidence',M,y);doc.setFont('helvetica','bold');setText(pCol);doc.text(pct+'%',M+CW,y,{align:'right'});
+    const by=y+5;fill(CARD2);doc.roundedRect(M,by,CW,7,3,3,'F');fill(pCol);doc.roundedRect(M,by,Math.max(4,CW*pct/100),7,3,3,'F');y+=22;
+    if(Array.isArray(ap.alternativeScenarios)&&ap.alternativeScenarios.length){const pad=10,innerW=CW-pad*2-4;
+      ap.alternativeScenarios.forEach(s=>{const sl=lines(s.description||'',9,innerW);const boxH=pad+sl.length*lh(9)+pad-4;ensure(boxH+6);
+        fill(CARD2);doc.roundedRect(M,y,CW,boxH,7,7,'F');fill(ACC);doc.roundedRect(M,y,3,boxH,1.5,1.5,'F');
+        let ty=y+pad+4;doc.setFont('helvetica','normal');doc.setFontSize(9);setText(SUB);sl.forEach(ln=>{doc.text(ln,M+pad+4,ty);ty+=lh(9);});y+=boxH+6;});}
+    if(ap.disclaimer){y+=2;paragraph(ap.disclaimer,8,MUT,4,'italic');}}
+
+  footer();
+  doc.save('clearlens-report-'+Date.now()+'.pdf');
+}
+
+$('btn-download-img').addEventListener('click',()=>{const r=analyzeState.result;if(!r){toast('No analysis to export');return;}try{downloadPDF(r);toast('Report PDF downloaded');}catch(e){toast('Could not generate PDF');}});
+
+/* ===== MULTI-ARTICLE COMPARE ===== */
+let compareCount=2;
+let compareMode=['paste','paste','paste'];
+const COMPARE_LABELS=['ARTICLE 1','ARTICLE 2','ARTICLE 3'];
+const COMPARE_COLORS=['var(--accent)','var(--blue)','var(--green)'];
+function getCompareText(i){return compareMode[i]==='url'?($('cmp-'+i+'-content')?.value||'').trim():($('cmp-'+i)?.value||'').trim();}
+function renderCompareInputs(){const wrap=$('compare-inputs');wrap.classList.toggle('cols-3',compareCount===3);let html='';
+  for(let i=0;i<compareCount;i++){
+    const pasteText=$('cmp-'+i)?escapeHtml($('cmp-'+i).value):'';
+    const pasteLen=$('cmp-'+i)?$('cmp-'+i).value.length.toLocaleString():'0';
+    const urlVal=$('cmp-'+i+'-url')?escapeHtml($('cmp-'+i+'-url').value):'';
+    const urlContent=$('cmp-'+i+'-content')?escapeHtml($('cmp-'+i+'-content').value):'';
+    const mode=compareMode[i]||'paste';
+    html+=`<div class="card"><div class="compare-col-head"><label class="compare-label" style="color:${COMPARE_COLORS[i]}">${COMPARE_LABELS[i]}</label>${i>=2?`<button class="compare-remove" data-rm="${i}"><i data-lucide="x"></i></button>`:''}</div>`+
+      `<div class="input-tabs"><button class="input-tab ${mode==='paste'?'active':''}" data-ctab="paste" data-col="${i}">Paste Text</button><button class="input-tab ${mode==='url'?'active':''}" data-ctab="url" data-col="${i}">From URL</button></div>`+
+      `<div class="cmp-paste ${mode==='url'?'hidden':''}"><textarea id="cmp-${i}" placeholder="Paste article ${i+1}..." maxlength="10000">${pasteText}</textarea><div class="char-count" id="cmp-${i}-count" style="text-align:right;margin-top:var(--s1)">${pasteLen} / 10,000</div></div>`+
+      `<div class="cmp-url ${mode==='paste'?'hidden':''}"><div style="display:flex;gap:var(--s1);margin-bottom:var(--s1)"><input type="url" id="cmp-${i}-url" placeholder="https://..." style="flex:1" value="${urlVal}"><button class="btn btn-secondary" id="cmp-${i}-fetch">Fetch</button><button class="btn btn-secondary" id="cmp-${i}-clear">Clear</button></div><div id="cmp-${i}-status" class="url-status"></div><textarea id="cmp-${i}-content" placeholder="Extracted content appears here..." readonly>${urlContent}</textarea></div>`+
+      `</div>`;
+  }
+  wrap.innerHTML=html;
+  for(let i=0;i<compareCount;i++){
+    $('cmp-'+i).addEventListener('input',()=>{$('cmp-'+i+'-count').textContent=$('cmp-'+i).value.length.toLocaleString()+' / 10,000';});
+    const fb=$('cmp-'+i+'-fetch');
+    if(fb)fb.addEventListener('click',async()=>{const col=i;const u=($('cmp-'+col+'-url').value||'').trim();const st=$('cmp-'+col+'-status');const setS=(m,c)=>{st.textContent=m;st.style.color=c;};if(!u||!u.startsWith('http')){setS('Enter valid URL','var(--red)');return;}setS('Fetching...','var(--t3)');fb.disabled=true;const t=await fetchArticleFromUrl(u);if(t){$('cmp-'+col+'-content').value=t;setS(t.length.toLocaleString()+' chars extracted','var(--green)');}else{$('cmp-'+col+'-content').value='';setS(URL_FAIL_MSG,'var(--red)');}fb.disabled=false;});
+    const cb=$('cmp-'+i+'-clear');
+    if(cb)cb.addEventListener('click',()=>{const col=i;$('cmp-'+col+'-url').value='';$('cmp-'+col+'-content').value='';$('cmp-'+col+'-status').textContent='';$('cmp-'+col).value='';$('cmp-'+col+'-count').textContent='0 / 10,000';compareMode[col]='paste';const card=cb.closest('.card');card.querySelector('.cmp-paste').classList.remove('hidden');card.querySelector('.cmp-url').classList.add('hidden');card.querySelectorAll('[data-ctab]').forEach(x=>x.classList.toggle('active',x.dataset.ctab==='paste'));});
+  }
+  wrap.querySelectorAll('[data-ctab]').forEach(b=>b.addEventListener('click',()=>{const col=+b.dataset.col,mode=b.dataset.ctab;compareMode[col]=mode;const card=b.closest('.card');card.querySelector('.cmp-paste').classList.toggle('hidden',mode==='url');card.querySelector('.cmp-url').classList.toggle('hidden',mode==='paste');card.querySelectorAll('[data-ctab]').forEach(x=>x.classList.toggle('active',x.dataset.ctab===mode));}));
+  wrap.querySelectorAll('[data-rm]').forEach(b=>b.addEventListener('click',()=>{compareCount=2;renderCompareInputs();}));
+  $('btn-add-article').style.display=compareCount>=3?'none':'';
+  if(typeof lucide!=='undefined')lucide.createIcons();
+}
+$('btn-add-article').addEventListener('click',()=>{if(compareCount<3){compareCount++;renderCompareInputs();}});
+$('btn-compare').addEventListener('click',async()=>{const texts=[];for(let i=0;i<compareCount;i++){texts.push(getCompareText(i));}if(texts.some(t=>t.length<3)){$('compare-error').textContent='All articles need 3+ characters';$('compare-error').classList.remove('hidden');return;}$('compare-error').classList.add('hidden');$('compare-loading').innerHTML=`<div class="skel-compare-grid cols-${compareCount}">${Array.from({length:compareCount}).map(()=>'<div class="skeleton" style="height:160px"></div>').join('')}</div>`;$('compare-loading').classList.remove('hidden');$('compare-results').classList.add('hidden');try{
+/* Analyze each article fully independently — real API per article, mock fallback per article. No article is derived from another. */
+const results=await Promise.all(texts.map(async t=>{let r=await callAnalyzeAPI(t,'article');if(!r)r=getMockAnalysis(t);return r;}));
+$('compare-loading').classList.add('hidden');
+/* Balance ranking: lower absolute bias is more balanced; credibility is the tiebreak (higher is better). */
+const scored=results.map((r,i)=>({i,absBias:Math.abs(r.biasScore),cred:r.credibilityScore||0,score:Math.abs(r.biasScore)-(r.credibilityScore||0)*0.3}));
+const ranked=[...scored].sort((a,b)=>a.score-b.score);
+const rankMap={};ranked.forEach((s,idx)=>rankMap[s.i]=idx+1);
+const best=ranked[0],second=ranked[1];
+const isTie=second&&Math.abs(best.score-second.score)<3;
+const winner=best.i+1;
+const col=(idx,r)=>{const z=getBiasZone(r.biasScore);const c=z==='blue'?'var(--blue)':z==='red'?'var(--red)':'var(--t1)';return`<div class="compare-col"><div class="card"><div class="card-title">Article ${idx+1} <span class="rank-badge">Rank #${rankMap[idx]}</span></div><div style="font-size:1.5rem;font-weight:800;color:${c};margin-bottom:4px">${r.biasScore>0?'+':''}${r.biasScore}</div><div style="font-size:.72rem;color:var(--t3);margin-bottom:var(--s2)">${{blue:'Left',grey:'Neutral',red:'Right'}[z]}</div><div style="font-size:1.3rem;font-weight:800;color:${r.credibilityScore>=70?'var(--green)':r.credibilityScore>=40?'var(--amber)':'var(--red)'}">${r.credibilityScore}/100</div><div style="font-size:.68rem;color:var(--t3);margin-top:4px">Credibility</div></div></div>`;};
+const cols=results.map((r,i)=>col(i,r)).join('');
+const verdictText=isTie?'Mixed result \u2014 articles are comparably balanced':`Article ${winner} is the most balanced`;
+const detail=isTie?`Top scores differ by less than the margin of significance across ${compareCount} sources`:`Ranked by lowest absolute bias, with credibility as the tiebreaker, across ${compareCount} sources`;
+const verdict=`<div class="compare-verdict card" style="grid-column:1/-1;margin-top:var(--s2)"><div class="compare-verdict-text">${verdictText}</div><div class="compare-verdict-detail">${detail}</div></div>`;
+$('compare-results').innerHTML=`<div class="compare-result-grid cols-${compareCount}">${cols}</div>${verdict}`;$('compare-results').classList.remove('hidden');}catch(e){$('compare-loading').classList.add('hidden');showDemoBadge();$('compare-results').innerHTML='<p style="color:var(--t3)">Analysis complete (demo data)</p>';$('compare-results').classList.remove('hidden');}});
+
+async function loadDashboard(){dashboardState.status='success';$('dashboard-updated').textContent=`Updated ${new Date().toLocaleTimeString()}`;renderTrending();await loadNews();}
+
+$('btn-refresh-dashboard').addEventListener('click',()=>{loadDashboard();});
+
+async function loadNews(){const ng=$('news-grid');ng.innerHTML='';$('news-loading').classList.remove('hidden');$('news-empty').classList.add('hidden');let arts=null;try{const r=await fetch('/api/news');if(r.ok){const d=await r.json();if(d.data&&d.data.length)arts=d.data;}}catch(e){}if(!arts||!arts.length){await new Promise(x=>setTimeout(x,400));arts=getMockNews();showDemoBadge();$('news-empty').classList.remove('hidden');}$('news-loading').classList.add('hidden');$('dashboard-updated').textContent=`Updated ${new Date().toLocaleTimeString()}`;ng.innerHTML=arts.slice(0,8).map((a,i)=>`<div class="news-card"><img class="news-card-img" src="${escapeHtml(a.image||'https://picsum.photos/seed/'+Date.now()+i+'/400/220')}" alt="" onerror="this.style.display='none'"><div class="news-card-body"><div class="news-card-source">${escapeHtml(a.source)}</div><div class="news-card-title">${escapeHtml(a.title)}</div><div style="display:flex;gap:6px"><button class="news-card-btn" data-hl="${escapeHtml(a.title)}">Analyze</button><a href="${escapeHtml(a.url)}" target="_blank" rel="noopener" class="news-card-btn">Read</a></div></div></div>`).join('');ng.querySelectorAll('[data-hl]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();inputText.value=b.dataset.hl;charCount.textContent=b.dataset.hl.length+' / 10,000';navigateTo('analyze');inputText.focus();}));}
+
+let globe=null;const gCoords=[{name:"Russia-Ukraine",lat:48.4,lng:35,color:'#ef4444',size:.8},{name:"Israel-Palestine",lat:31.5,lng:34.8,color:'#ef4444',size:.8},{name:"Sudan",lat:15.5,lng:32.5,color:'#ef4444',size:.7},{name:"Myanmar",lat:19.8,lng:96.2,color:'#f59e0b',size:.6},{name:"Taiwan Strait",lat:23.7,lng:121,color:'#f59e0b',size:.6},{name:"Sahel",lat:14,lng:-2,color:'#f59e0b',size:.6},{name:"Yemen",lat:15.4,lng:44.2,color:'#f59e0b',size:.5},{name:"Kashmir",lat:34.1,lng:74.8,color:'#10b981',size:.5},{name:"South China Sea",lat:12,lng:114,color:'#10b981',size:.5}];
+
+function initGlobe(){const c=$('globe-container');if(!c||globe)return;if(window.__globeFailed||typeof Globe==='undefined'){c.innerHTML='<div class="globe-fallback"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg><div>Globe unavailable \u2014 showing conflict list below</div></div>';return;}const dk=!document.documentElement.classList.contains('light');try{globe=Globe()(c).globeImageUrl(dk?'https://unpkg.com/three-globe/example/img/earth-night.jpg':'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg').backgroundImageUrl('').backgroundColor('rgba(0,0,0,0)').width(c.clientWidth).height(480).pointsData(gCoords).pointLat('lat').pointLng('lng').pointColor('color').pointAltitude(.07).pointRadius(d=>d.size||.5).atmosphereColor('#5b5fff').atmosphereAltitude(.2).onPointClick(p=>{inputText.value=p.name;charCount.textContent=p.name.length+' / 10,000';navigateTo('analyze');inputText.focus();}).onPointHover(p=>{const tt=$('globe-tooltip');if(p){tt.textContent=p.name;tt.style.display='block';}else tt.style.display='none';});globe.controls().autoRotate=true;globe.controls().autoRotateSpeed=.4;globe.controls().enableZoom=false;new ResizeObserver(()=>{if(globe&&c.clientWidth>0)globe.width(c.clientWidth);}).observe(c);}catch(e){c.innerHTML='<div class="globe-fallback"><div>Globe unavailable</div></div>';}}
+
+const btnTheme=$('btn-theme');
+function setTheme(l,animate){
+  if(animate){const h=document.documentElement;h.classList.add('theme-anim');clearTimeout(window.__themeT);window.__themeT=setTimeout(()=>h.classList.remove('theme-anim'),450);}
+  document.documentElement.classList.toggle('light',l);
+  btnTheme.innerHTML=(l?'<i data-lucide="sun"></i>':'<i data-lucide="moon"></i>')+' <span class="nav-label">Theme</span>';
+  if(typeof lucide!=='undefined')lucide.createIcons();
+  localStorage.setItem('clearlens_theme',l?'light':'dark');
+  const day='https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg',night='https://unpkg.com/three-globe/example/img/earth-night.jpg';
+  try{const gc=$('globe-container');if(globe&&gc&&animate){gc.style.opacity='0';setTimeout(()=>{try{globe.globeImageUrl(l?day:night);}catch(e){}gc.style.opacity='1';},300);}else if(globe){globe.globeImageUrl(l?day:night);}}catch(e){}
+}
+btnTheme.addEventListener('click',()=>setTheme(!document.documentElement.classList.contains('light'),true));
+
+const topics=['US-China trade tensions','Russia-Ukraine peace talks','BRICS expansion','AI global regulation','Climate policy shifts','Middle East ceasefire','Cyber warfare threats','De-dollarization'];
+function renderTrending(){const list=[...topics].sort(()=>Math.random()-0.5);$('trending-grid').innerHTML=list.map(t=>`<div class="trending-card" data-topic="${escapeHtml(t)}">${escapeHtml(t)}</div>`).join('');addPressEffect($('trending-grid'),'.trending-card',(el)=>{inputText.value=el.dataset.topic;charCount.textContent=el.dataset.topic.length+' / 10,000';navigateTo('analyze');inputText.focus();});}
+
+$('btn-theme-dark').addEventListener('click',()=>setTheme(false,true));
+$('btn-theme-light').addEventListener('click',()=>setTheme(true,true));
+
+/* Mobile sidebar toggle */
+$('mobile-menu-btn').addEventListener('click',()=>{const sb=$('sidebar'),ov=$('sidebar-overlay');const open=sb.classList.toggle('open');ov.classList.toggle('show',open);});
+$('sidebar-overlay').addEventListener('click',closeSidebar);
+
+/* Sidebar collapse toggle */
+function setCollapsed(c){document.documentElement.classList.toggle('sidebar-collapsed',c);const btn=$('collapse-btn');if(btn)btn.title=c?'Expand sidebar':'Collapse sidebar';localStorage.setItem('clearlens_sidebar_collapsed',c?'1':'0');}
+$('collapse-btn').addEventListener('click',()=>{setCollapsed(!document.documentElement.classList.contains('sidebar-collapsed'));});
+
+/* Home: jump to Compare */
+$('link-compare').addEventListener('click',(e)=>{e.preventDefault();navigateTo('compare');});
+
+/* Annotated article toggle */
+$('annotated-toggle').addEventListener('click',()=>{const body=$('annotated-body'),chev=$('annotated-chevron');body.classList.toggle('hidden');if(chev)chev.style.transform=body.classList.contains('hidden')?'rotate(0)':'rotate(180deg)';});
+
+/* Clear history */
+$('btn-clear-history').addEventListener('click',()=>{localStorage.removeItem('clearlens_history');renderHistory();});
+
+// 3D scroll entrance observer
+const scrollObs=new IntersectionObserver((entries)=>{entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in-view');scrollObs.unobserve(e.target);}});},{threshold:0.1});
+function observe3D(){document.querySelectorAll('.home-feat,.conflict-card,.news-card').forEach(el=>{el.classList.add('card-3d-enter');scrollObs.observe(el);});}
+
+// 3D press effect for conflict cards and trending cards
+function addPressEffect(container,selector,callback){container.querySelectorAll(selector).forEach(el=>{el.classList.add('card-press');el.addEventListener('mousedown',()=>el.classList.add('pressing'));el.addEventListener('mouseup',()=>{el.classList.remove('pressing');setTimeout(()=>callback(el),120);});el.addEventListener('mouseleave',()=>el.classList.remove('pressing'));});}
+
+(function(){if(localStorage.getItem('clearlens_sidebar_collapsed')==='1')setCollapsed(true);setTheme(localStorage.getItem('clearlens_theme')==='light');renderTrending();renderCompareInputs();updateUI();if(typeof lucide!=='undefined')lucide.createIcons();observe3D();})();
+</script>
+</body>
+</html>

@@ -60,6 +60,10 @@ async function assertHostIsSafe(hostname) {
 // after the initial hostname check already passed.
 async function safeFetch(startUrl) {
   let currentUrl = startUrl;
+  // Overall deadline across ALL redirect hops combined, so a chain of slow
+  // redirects can't add up to more than the serverless function's own timeout.
+  const OVERALL_TIMEOUT_MS = 25000;
+  const deadlineAt = Date.now() + OVERALL_TIMEOUT_MS;
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     const u = new URL(currentUrl);
@@ -68,8 +72,16 @@ async function safeFetch(startUrl) {
     }
     await assertHostIsSafe(u.hostname);
 
+    const remaining = deadlineAt - Date.now();
+    if (remaining <= 500) {
+      const err = new Error('Fetch deadline exceeded');
+      err.name = 'AbortError';
+      throw err;
+    }
+    const hopTimeout = Math.min(FETCH_TIMEOUT_MS, remaining);
+
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), hopTimeout);
 
     let response;
     try {

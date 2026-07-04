@@ -493,7 +493,7 @@ $('tab-paste').addEventListener('click',()=>{inputMode='paste';$('paste-mode').c
 $('tab-url').addEventListener('click',()=>{inputMode='url';$('url-mode').classList.remove('hidden');$('paste-mode').classList.add('hidden');$('tab-url').classList.add('active');$('tab-paste').classList.remove('active');});
 
 /* ===== Shared URL article fetch + extraction (used by Analyze and Compare) ===== */
-function fetchT(u,opts){const c=new AbortController();const to=setTimeout(()=>c.abort(),10000);return fetch(u,Object.assign({signal:c.signal},opts||{})).finally(()=>clearTimeout(to));}
+function fetchT(u,opts,timeoutMs){const c=new AbortController();const to=setTimeout(()=>c.abort(),timeoutMs||10000);return fetch(u,Object.assign({signal:c.signal},opts||{})).finally(()=>clearTimeout(to));}
 /* Convert HTML to line-structured block text so we can filter line-by-line */
 function htmlToLines(html){const doc=new DOMParser().parseFromString(html||'','text/html');doc.querySelectorAll('script,style,nav,footer,header,aside,iframe,form,noscript').forEach(e=>e.remove());const root=doc.querySelector('article')||doc.querySelector('main')||doc.body;if(!root)return '';const blocks=root.querySelectorAll('p,h1,h2,h3,h4,h5,h6,li,blockquote');let arr=[];if(blocks.length){blocks.forEach(b=>{const t=(b.textContent||'').trim();if(t)arr.push(t);});}else{arr=(root.textContent||'').split(/\n+/);}return arr.join('\n');}
 /* Junk-line detection: nav/menu link lists, images, boilerplate */
@@ -535,15 +535,17 @@ function looksLikeFetchFailure(t){t=t||'';if(URL_FAIL_INDICATORS.some(re=>re.tes
   return false;}
 async function fetchArticleFromUrl(url){
   const attempts=[
-    /* 1. Server-side proxy (no CORS, real browser UA) — most reliable */
-    async()=>{const r=await fetchT('/api/fetch-url?url='+encodeURIComponent(url));if(!r.ok)throw 0;const d=await r.json();if(!d.html)throw 0;return htmlToLines(d.html);},
-    /* 2. Jina AI reader — renders JS, returns clean markdown */
-    async()=>{const r=await fetchT('https://r.jina.ai/'+url);if(!r.ok)throw 0;return await r.text();},
-    /* 3-4. Generic CORS proxies */
-    async()=>{const r=await fetchT('https://api.allorigins.win/raw?url='+encodeURIComponent(url));if(!r.ok)throw 0;return htmlToLines(await r.text());},
-    async()=>{const r=await fetchT('https://api.allorigins.win/get?url='+encodeURIComponent(url));if(!r.ok)throw 0;const d=await r.json();return htmlToLines(d.contents);},
-    async()=>{const r=await fetchT('https://corsproxy.io/?url='+encodeURIComponent(url));if(!r.ok)throw 0;return htmlToLines(await r.text());},
-    async()=>{const r=await fetchT('https://thingproxy.freeboard.io/fetch/'+url);if(!r.ok)throw 0;return htmlToLines(await r.text());}
+    /* 1. Server-side proxy (no CORS, real browser UA, handles redirects itself) — most reliable, give it the most time */
+    async()=>{const r=await fetchT('/api/fetch-url?url='+encodeURIComponent(url),{},25000);if(!r.ok)throw 0;const d=await r.json();if(!d.html)throw 0;return htmlToLines(d.html);},
+    /* 2. Jina AI reader — renders JS, returns clean markdown (slower, so it gets more time) */
+    async()=>{const r=await fetchT('https://r.jina.ai/'+url,{},20000);if(!r.ok)throw 0;return await r.text();},
+    /* 3. codetabs — reliable general-purpose CORS proxy */
+    async()=>{const r=await fetchT('https://api.codetabs.com/v1/proxy?quest='+encodeURIComponent(url),{},14000);if(!r.ok)throw 0;return htmlToLines(await r.text());},
+    /* 4-5. allorigins CORS proxies */
+    async()=>{const r=await fetchT('https://api.allorigins.win/raw?url='+encodeURIComponent(url),{},14000);if(!r.ok)throw 0;return htmlToLines(await r.text());},
+    async()=>{const r=await fetchT('https://api.allorigins.win/get?url='+encodeURIComponent(url),{},14000);if(!r.ok)throw 0;const d=await r.json();return htmlToLines(d.contents);},
+    /* 6. corsproxy.io — last resort */
+    async()=>{const r=await fetchT('https://corsproxy.io/?url='+encodeURIComponent(url),{},12000);if(!r.ok)throw 0;return htmlToLines(await r.text());}
   ];
   for(const attempt of attempts){try{const raw=await attempt();if(looksLikeFetchFailure(raw))continue;const art=extractArticle(raw);if(art&&!looksLikeFetchFailure(art)&&art.length>=100)return art.length>10000?art.substring(0,10000):art;}catch(e){}}
   return '';
@@ -669,115 +671,280 @@ function downloadPDF(r){
   const jspdf=window.jspdf;if(!jspdf||!jspdf.jsPDF){toast('PDF library unavailable');return;}
   const doc=new jspdf.jsPDF({unit:'pt',format:'a4'});
   const PW=doc.internal.pageSize.getWidth(),PH=doc.internal.pageSize.getHeight();
-  const M=44,CW=PW-M*2;let y=M;
-  const BG=[13,17,23],CARD=[22,27,34],CARD2=[30,36,46],BORD=[48,54,64],TX=[230,237,243],SUB=[200,208,218],MUT=[139,148,158],ACC=[91,95,255];
-  const BLUE=[96,165,250],RED=[239,68,68],AMBER=[245,158,11],GREEN=[16,185,129],GREY=[139,148,158];
+  const M=46,CW=PW-M*2;let y=M;
+
+  /* ===== PALETTE — dark, modern, editorial ===== */
+  const BG=[9,10,14],CARD=[19,22,28],CARD2=[25,29,37],BORD=[42,47,57];
+  const TX=[240,242,246],SUB=[199,205,214],MUT=[132,140,152];
+  const ACC1=[99,102,241],ACC2=[139,92,246],ACC=[122,124,247];
+  const BLUE=[96,165,250],RED=[239,68,68],AMBER=[245,158,11],GREEN=[52,211,153],GREY=[148,155,166];
+
+  const lerp=(a,b,t)=>[Math.round(a[0]+(b[0]-a[0])*t),Math.round(a[1]+(b[1]-a[1])*t),Math.round(a[2]+(b[2]-a[2])*t)];
+  const soft=c=>lerp(BG,c,0.18);
   const dateStr=new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
+  const timeStr=new Date().toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
   const reportId='CL-'+Date.now().toString(36).toUpperCase();
-  const fill=c=>doc.setFillColor(c[0],c[1],c[2]);const stroke=c=>doc.setDrawColor(c[0],c[1],c[2]);const setText=c=>doc.setTextColor(c[0],c[1],c[2]);
-  const lh=s=>s*1.34;
-  const HEAD_H=40;const TOP_START=M+HEAD_H;
+
+  const fill=c=>doc.setFillColor(c[0],c[1],c[2]);
+  const stroke=c=>doc.setDrawColor(c[0],c[1],c[2]);
+  const setText=c=>doc.setTextColor(c[0],c[1],c[2]);
+  const lh=s=>s*1.36;
+
+  function gradH(x,gy,w,h,c1,c2,steps){steps=steps||Math.max(24,Math.round(w/6));const sw=w/steps;for(let i=0;i<steps;i++){fill(lerp(c1,c2,i/(steps-1)));doc.rect(x+sw*i,gy,sw+0.75,h,'F');}}
+  function chip(x,cy,label,col,textCol){doc.setFont('helvetica','bold');doc.setFontSize(8);const tw=doc.getTextWidth(label.toUpperCase());const padX=8,w=tw+padX*2,h=15;fill(soft(col));doc.roundedRect(x,cy,w,h,4,4,'F');setText(textCol||col);doc.text(label.toUpperCase(),x+padX,cy+10.5);return w;}
+  function circleBadge(cx,cy,r,num,col){fill(col);doc.circle(cx,cy,r,'F');doc.setFont('helvetica','bold');doc.setFontSize(r*0.85);setText([255,255,255]);doc.text(String(num),cx,cy+r*0.34,{align:'center'});}
+  function ringGauge(cx,cy,cr,pct,col){
+    stroke(soft(GREY));doc.setLineWidth(7);doc.circle(cx,cy,cr,'S');
+    stroke(col);doc.setLineWidth(7);
+    try{doc.setLineCap('round');}catch(e){}
+    const total=64,steps=Math.max(1,Math.round(total*Math.max(0,Math.min(100,pct))/100));
+    for(let i=0;i<steps;i++){
+      const a0=-Math.PI/2+(i/total)*2*Math.PI,a1=-Math.PI/2+((i+1)/total)*2*Math.PI;
+      doc.line(cx+cr*Math.cos(a0),cy+cr*Math.sin(a0),cx+cr*Math.cos(a1),cy+cr*Math.sin(a1));
+    }
+    try{doc.setLineCap('butt');}catch(e){}
+  }
+
+  const HEAD_H=42;const TOP_START=M+HEAD_H;
   let sectionNum=0;
+
   function paintBg(){fill(BG);doc.rect(0,0,PW,PH,'F');}
-  function runningHeader(){fill(ACC);doc.roundedRect(M,M-6,16,16,4,4,'F');doc.setFont('helvetica','bold');doc.setFontSize(9);setText([255,255,255]);doc.text('C',M+8,M+5.5,{align:'center'});doc.setFont('helvetica','bold');doc.setFontSize(10);setText(TX);doc.text('ClearLens Intelligence Report',M+24,M+5);stroke(BORD);doc.setLineWidth(.6);doc.line(M,M+16,PW-M,M+16);}
-  function footerLine(){stroke(BORD);doc.setLineWidth(.5);doc.line(M,PH-34,PW-M,PH-34);doc.setFont('helvetica','normal');doc.setFontSize(8);setText(MUT);doc.text(reportId,M,PH-20);doc.text(dateStr,PW-M,PH-20,{align:'right'});}
-  function ensure(h){if(y+h>PH-46){footerLine();doc.addPage();paintBg();runningHeader();y=TOP_START;}}
+  function runningHeader(){
+    fill(ACC1);doc.roundedRect(M,M-8,17,17,5,5,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(9.5);setText([255,255,255]);doc.text('C',M+8.5,M+4.5,{align:'center'});
+    doc.setFont('helvetica','bold');doc.setFontSize(10.5);setText(TX);doc.text('ClearLens',M+25,M+3.5);
+    doc.setFont('helvetica','normal');doc.setFontSize(8.5);setText(MUT);doc.text('Intelligence Report',M+25+doc.getTextWidth('ClearLens ')+2,M+3.5);
+    doc.setFont('helvetica','normal');doc.setFontSize(8);setText(MUT);doc.text(reportId,PW-M,M+3.5,{align:'right'});
+    gradH(M,M+15,CW,1.6,ACC1,ACC2);
+  }
+  function footerLine(){
+    stroke(BORD);doc.setLineWidth(.6);doc.line(M,PH-36,PW-M,PH-36);
+    fill(ACC1);doc.circle(M+2.2,PH-22,2.2,'F');
+    doc.setFont('helvetica','normal');doc.setFontSize(7.8);setText(MUT);
+    doc.text('ClearLens  \u00b7  AI-generated analysis',M+9,PH-19.5);
+    doc.text(dateStr+'  \u00b7  '+timeStr,PW-M,PH-19.5,{align:'right'});
+  }
+  function ensure(h){if(y+h>PH-48){footerLine();doc.addPage();paintBg();runningHeader();y=TOP_START;}}
   function lines(t,size,w){doc.setFontSize(size);return doc.splitTextToSize((t||'').toString(),w);}
-  function header(t){ensure(30);sectionNum++;fill(ACC);doc.roundedRect(M,y-9,3.5,16,1.5,1.5,'F');doc.setFont('helvetica','bold');doc.setFontSize(11);setText(TX);doc.text(sectionNum+'. '+t.toUpperCase(),M+12,y+3);y+=24;}
+  function header(t,subtitle){
+    ensure(subtitle?42:30);
+    sectionNum++;
+    const startY=y;
+    fill(ACC1);doc.roundedRect(M,startY-10,18,18,5,5,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(9.5);setText([255,255,255]);doc.text(String(sectionNum),M+9,startY+1.5,{align:'center'});
+    doc.setFont('helvetica','bold');doc.setFontSize(12.5);setText(TX);doc.text(t,M+27,startY+2);
+    const lineY=startY+12;
+    stroke(BORD);doc.setLineWidth(.7);doc.line(M,lineY,PW-M,lineY);
+    let contentY=lineY+16;
+    if(subtitle){doc.setFont('helvetica','normal');doc.setFontSize(8.7);setText(MUT);doc.text(subtitle,M,contentY-4);contentY+=14;}
+    y=contentY;
+  }
   function paragraph(t,size,color,gap,style){const ls=lines(t,size,CW);doc.setFont('helvetica',style||'normal');setText(color);ls.forEach(ln=>{ensure(lh(size));doc.text(ln,M,y);y+=lh(size);});doc.setFont('helvetica','normal');y+=(gap||0);}
 
-  /* ===== COVER PAGE ===== */
+  const zAll=getBiasZone(r.biasScore);
+  const zCol=zAll==='blue'?BLUE:zAll==='red'?RED:GREY;
+  const zLabel={blue:'Left-leaning',grey:'Neutral',red:'Right-leaning'}[zAll];
+  const cred=r.credibilityScore||0;
+  const credCol=cred>=70?GREEN:cred>=40?AMBER:RED;
+  const credLabel=cred>=70?'High credibility':cred>=40?'Moderate credibility':'Low credibility';
+
+  /* ============================================================
+     COVER PAGE
+  ============================================================ */
   paintBg();
-  fill(ACC);doc.roundedRect(M,150,54,54,12,12,'F');doc.setFont('helvetica','bold');doc.setFontSize(26);setText([255,255,255]);doc.text('C',M+27,150+36,{align:'center'});
-  setText(TX);doc.setFont('helvetica','bold');doc.setFontSize(28);doc.text('ClearLens',M+66,150+24);
-  doc.setFont('helvetica','normal');doc.setFontSize(12);setText(MUT);doc.text('Intelligence & Credibility Report',M+66,150+44);
+  gradH(0,0,PW,7,ACC1,ACC2);
 
-  stroke(BORD);doc.setLineWidth(.7);doc.line(M,150+90,PW-M,150+90);
+  const logoY=118;
+  fill(ACC1);doc.roundedRect(M,logoY,58,58,14,14,'F');
+  gradH(M,logoY,58,58,ACC1,ACC2,40);
+  doc.setFont('helvetica','bold');doc.setFontSize(28);setText([255,255,255]);doc.text('C',M+29,logoY+38,{align:'center'});
 
-  const topic=(currentAnalysisInput||'').replace(/\s+/g,' ').trim()||'Untitled analysis';const isTopic=topic.length<100;
-  let coverY=150+90+36;
-  doc.setFont('helvetica','normal');doc.setFontSize(9);setText(MUT);doc.text('SUBJECT',M,coverY);coverY+=20;
-  doc.setFont('helvetica','bold');setText(TX);
-  lines(topic.slice(0,300)+(topic.length>300?'...':''),16,CW).forEach(ln=>{doc.text(ln,M,coverY);coverY+=22;});
-  if(isTopic){doc.setFont('helvetica','italic');doc.setFontSize(9.5);setText(ACC);doc.text('Topic-based general analysis \u2014 no specific article provided',M,coverY+4);}
+  setText(TX);doc.setFont('helvetica','bold');doc.setFontSize(30);doc.text('ClearLens',M+72,logoY+26);
+  doc.setFont('helvetica','normal');doc.setFontSize(12.5);setText(MUT);doc.text('Intelligence & Credibility Report',M+72,logoY+47);
 
-  const metaY=PH-150;
+  const dividerY=logoY+58+34;
+  gradH(M,dividerY,CW,1.6,ACC1,ACC2);
+
+  const topic=(currentAnalysisInput||'').replace(/\s+/g,' ').trim()||'Untitled analysis';
+  const isTopic=topic.length<100;
+
+  let coverY=dividerY+34;
+  doc.setFont('helvetica','bold');doc.setFontSize(8.5);setText(ACC);doc.text('S U B J E C T',M,coverY);
+  coverY+=18;
+
+  const subjLines=lines(topic.slice(0,320)+(topic.length>320?'\u2026':''),17,CW-32);
+  const subjBoxH=20+subjLines.length*lh(17)+18+(isTopic?20:0);
+  fill(CARD);stroke(BORD);doc.setLineWidth(.7);doc.roundedRect(M,coverY,CW,subjBoxH,10,10,'FD');
+  fill(ACC1);doc.roundedRect(M,coverY,4,subjBoxH,2,2,'F');
+  let sy=coverY+28;doc.setFont('helvetica','bold');setText(TX);
+  subjLines.forEach(ln=>{doc.text(ln,M+18,sy);sy+=lh(17);});
+  if(isTopic){sy+=4;chip(M+18,sy-11,'Topic-based general analysis',ACC1,ACC1);}
+  coverY+=subjBoxH+26;
+
+  /* quick snapshot row */
+  const cardW=(CW-16*2)/3,cardH=88;
+  function snapshotCard(x,title,valueText,valueCol,sub){
+    fill(CARD2);stroke(BORD);doc.setLineWidth(.7);doc.roundedRect(x,coverY,cardW,cardH,10,10,'FD');
+    doc.setFont('helvetica','normal');doc.setFontSize(8);setText(MUT);doc.text(title.toUpperCase(),x+16,coverY+22);
+    doc.setFont('helvetica','bold');doc.setFontSize(22);setText(valueCol);doc.text(valueText,x+16,coverY+50);
+    doc.setFont('helvetica','normal');doc.setFontSize(8.5);setText(SUB);doc.text(sub,x+16,coverY+68);
+  }
+  snapshotCard(M,'Bias Score',(r.biasScore>0?'+':'')+r.biasScore,zCol,zLabel);
+  snapshotCard(M+cardW+16,'Credibility',cred+'/100',credCol,credLabel);
+  const conf=r.aiPrediction?.confidencePercent;
+  snapshotCard(M+(cardW+16)*2,'Prediction Confidence',(conf!=null?conf:'\u2013')+(conf!=null?'%':''),conf>=66?GREEN:conf>=33?AMBER:RED,conf!=null?'Forecast reliability':'Not available');
+
+  const metaY=PH-96;
   stroke(BORD);doc.setLineWidth(.7);doc.line(M,metaY,PW-M,metaY);
-  function metaItem(label,value,x,col){doc.setFont('helvetica','normal');doc.setFontSize(8.5);setText(MUT);doc.text(label,x,metaY+26);doc.setFont('helvetica','bold');doc.setFontSize(12);setText(col||TX);doc.text(String(value),x,metaY+46);}
-  const zCover=getBiasZone(r.biasScore);const zColCover=zCover==='blue'?BLUE:zCover==='red'?RED:GREY;
-  const credCover=r.credibilityScore||0;const credColCover=credCover>=70?GREEN:credCover>=40?AMBER:RED;
-  metaItem('REPORT ID',reportId,M);
-  metaItem('DATE GENERATED',dateStr,M+CW/3);
-  metaItem('BIAS SCORE',(r.biasScore>0?'+':'')+r.biasScore,M+CW*2/3,zColCover);
-  footerLine();
-  doc.setFont('helvetica','normal');doc.setFontSize(8);setText(MUT);doc.text('Cover',PW/2,PH-20,{align:'center'});
+  doc.setFont('helvetica','normal');doc.setFontSize(8.3);setText(MUT);
+  doc.text('REPORT ID',M,metaY+22);doc.text('GENERATED',M+CW/3,metaY+22);doc.text('FORMAT',M+CW*2/3,metaY+22);
+  doc.setFont('helvetica','bold');doc.setFontSize(11);setText(TX);
+  doc.text(reportId,M,metaY+40);doc.text(dateStr,M+CW/3,metaY+40);doc.text('AI-generated \u2014 not verified news',M+CW*2/3,metaY+40);
 
-  /* ===== CONTENT START ===== */
+  gradH(0,PH-6,PW,6,ACC2,ACC1);
+
+  /* ============================================================
+     CONTENT PAGES
+  ============================================================ */
   doc.addPage();paintBg();runningHeader();y=TOP_START;
 
-  /* Media Bias — gauge */
-  header('Media Bias Score');
-  const z=getBiasZone(r.biasScore);const zCol=z==='blue'?BLUE:z==='red'?RED:GREY;const zl={blue:'Left-leaning',grey:'Neutral',red:'Right-leaning'}[z];
-  ensure(58);
-  doc.setFont('helvetica','bold');doc.setFontSize(24);setText(zCol);doc.text((r.biasScore>0?'+':'')+r.biasScore,M,y+10);
-  doc.setFont('helvetica','bold');doc.setFontSize(11);setText(TX);doc.text(zl,M+82,y+2);
-  doc.setFont('helvetica','normal');doc.setFontSize(8.5);setText(MUT);doc.text('Scale -100 (Left) to +100 (Right)',M+82,y+14);
-  y+=24;const barY=y,barH=9;
-  fill(BLUE);doc.roundedRect(M,barY,CW*0.4,barH,2,2,'F');fill(GREY);doc.rect(M+CW*0.4,barY,CW*0.2,barH,'F');fill(RED);doc.roundedRect(M+CW*0.6,barY,CW*0.4,barH,2,2,'F');
-  const mx=M+((r.biasScore+100)/200)*CW;fill([255,255,255]);doc.circle(mx,barY+barH/2,5.5,'F');fill(zCol);doc.circle(mx,barY+barH/2,3,'F');
-  y+=barH+8;doc.setFontSize(7.5);setText(MUT);doc.text('Left',M,y);doc.text('Center',M+CW/2,y,{align:'center'});doc.text('Right',M+CW,y,{align:'right'});y+=14;
-  if(r.biasRationale)paragraph(r.biasRationale,9.5,MUT,10);
+  /* Executive summary strip */
+  const esH=64;
+  fill(CARD);stroke(BORD);doc.setLineWidth(.7);doc.roundedRect(M,y,CW,esH,10,10,'FD');
+  const colW=CW/3;
+  function esItem(i,label,value,col){const x=M+colW*i+18;doc.setFont('helvetica','normal');doc.setFontSize(7.8);setText(MUT);doc.text(label.toUpperCase(),x,y+22);doc.setFont('helvetica','bold');doc.setFontSize(17);setText(col);doc.text(value,x,y+44);}
+  esItem(0,'Bias',(r.biasScore>0?'+':'')+r.biasScore+'  \u00b7  '+zLabel,zCol);
+  esItem(1,'Credibility',cred+'/100',credCol);
+  esItem(2,'Outlook confidence',(r.aiPrediction?.confidencePercent!=null?r.aiPrediction.confidencePercent+'%':'N/A'),r.aiPrediction?.confidencePercent>=66?GREEN:r.aiPrediction?.confidencePercent>=33?AMBER:RED);
+  stroke(BORD);doc.setLineWidth(.6);doc.line(M+colW,y+14,M+colW,y+esH-14);doc.line(M+colW*2,y+14,M+colW*2,y+esH-14);
+  y+=esH+26;
 
-  /* Credibility — ring + factor bars */
-  header('Credibility Assessment');
-  const cred=r.credibilityScore||0;const credCol=cred>=70?GREEN:cred>=40?AMBER:RED;
-  ensure(78);
-  const cx=M+30,cy=y+30,cr=25;
-  stroke(BORD);doc.setLineWidth(5);doc.circle(cx,cy,cr,'S');stroke(credCol);doc.setLineWidth(5);doc.circle(cx,cy,cr,'S');
-  doc.setFont('helvetica','bold');doc.setFontSize(15);setText(TX);doc.text(String(cred),cx,cy+2,{align:'center'});doc.setFont('helvetica','normal');doc.setFontSize(7);setText(MUT);doc.text('/100',cx,cy+12,{align:'center'});
-  const fx=M+80,fw=CW-80;let fy=y+8;
-  const em=r.emotionalLanguage||0,sb=r.sourceBalance||0,fd=r.factualDensity||0;
-  function factor(label,val,col){doc.setFont('helvetica','normal');doc.setFontSize(8.5);setText(MUT);doc.text(label,fx,fy);doc.setFont('helvetica','bold');setText(col);doc.text(val+'%',fx+fw,fy,{align:'right'});const bgy=fy+4;fill(CARD2);doc.roundedRect(fx,bgy,fw,6,3,3,'F');fill(col);doc.roundedRect(fx,bgy,Math.max(4,fw*val/100),6,3,3,'F');fy+=22;}
-  factor('Emotional Language',100-em,em>60?RED:em>30?AMBER:GREEN);
-  factor('Source Balance',sb,sb>=60?GREEN:sb>=35?AMBER:RED);
-  factor('Factual Density',fd,fd>=60?GREEN:fd>=35?AMBER:RED);
-  y=Math.max(y+78,fy)+2;
+  /* Media Bias */
+  header('Media Bias Score','How this content leans on a left\u2013right political spectrum');
+  ensure(60);
+  doc.setFont('helvetica','bold');doc.setFontSize(26);setText(zCol);doc.text((r.biasScore>0?'+':'')+r.biasScore,M,y+10);
+  chip(M+88,y-8,zLabel,zCol);
+  doc.setFont('helvetica','normal');doc.setFontSize(8.3);setText(MUT);doc.text('Scored on a \u2212100 (left) to +100 (right) scale',M+88,y+20);
+  y+=32;
+  const barY=y,barH=10;
+  gradH(M,barY,CW*0.42,barH,BLUE,GREY);
+  gradH(M+CW*0.42,barY,CW*0.16,barH,GREY,GREY);
+  gradH(M+CW*0.58,barY,CW*0.42,barH,GREY,RED);
+  const mx=M+((r.biasScore+100)/200)*CW;
+  fill(BG);doc.circle(mx,barY+barH/2,6.5,'F');fill(zCol);doc.circle(mx,barY+barH/2,4,'F');
+  y+=barH+10;doc.setFont('helvetica','normal');doc.setFontSize(7.6);setText(MUT);
+  doc.text('LEFT',M,y);doc.text('CENTER',M+CW/2,y,{align:'center'});doc.text('RIGHT',M+CW,y,{align:'right'});
+  y+=18;
+  if(r.biasRationale)paragraph(r.biasRationale,9.5,SUB,10);
 
-  /* Missing Facts — numbered cards */
-  if(Array.isArray(r.missingFacts)&&r.missingFacts.length){header('Missing Facts');const pad=12,badge=20,tw=CW-pad*2-badge-8;
-    r.missingFacts.forEach((f,i)=>{const hl=lines(f.heading||'',10.5,tw);const dl=f.description?lines(f.description,9,tw):[];const boxH=pad+hl.length*lh(10.5)+(dl.length?4+dl.length*lh(9):0)+pad-6;ensure(boxH+8);
-      fill(CARD2);doc.roundedRect(M,y,CW,boxH,8,8,'F');fill(ACC);doc.roundedRect(M+pad,y+pad-2,badge,badge,5,5,'F');doc.setFont('helvetica','bold');doc.setFontSize(10);setText([255,255,255]);doc.text(String(i+1),M+pad+badge/2,y+pad+badge/2+1.5,{align:'center'});
-      let ty=y+pad+7;const tx=M+pad+badge+8;doc.setFont('helvetica','bold');doc.setFontSize(10.5);setText(TX);hl.forEach(ln=>{doc.text(ln,tx,ty);ty+=lh(10.5);});if(dl.length){ty+=2;doc.setFont('helvetica','normal');doc.setFontSize(9);setText(MUT);dl.forEach(ln=>{doc.text(ln,tx,ty);ty+=lh(9);});}
-      y+=boxH+8;});}
+  /* Credibility */
+  header('Credibility Assessment','Composite score based on tone, sourcing, and factual grounding');
+  const emv=r.emotionalLanguage||0,sbv=r.sourceBalance||0,fdv=r.factualDensity||0;
+  const factors=[['Emotional Language',100-emv,emv>60?RED:emv>30?AMBER:GREEN],['Source Balance',sbv,sbv>=60?GREEN:sbv>=35?AMBER:RED],['Factual Density',fdv,fdv>=60?GREEN:fdv>=35?AMBER:RED]];
+  const ringBlockH=Math.max(96,26+factors.length*24);
+  ensure(ringBlockH+8);
+  const cx=M+38,cy=y+ringBlockH/2-4,cr=32;
+  ringGauge(cx,cy,cr,cred,credCol);
+  doc.setFont('helvetica','bold');doc.setFontSize(17);setText(TX);doc.text(String(cred),cx,cy+3,{align:'center'});
+  doc.setFont('helvetica','normal');doc.setFontSize(7.6);setText(MUT);doc.text('/ 100',cx,cy+15,{align:'center'});
+  doc.setFont('helvetica','bold');doc.setFontSize(9);setText(credCol);doc.text(credLabel,cx,cy+cr+18,{align:'center'});
 
-  /* Conflict Background — bordered box */
-  if(r.conflictBackground){header('Conflict Background & Key Players');const pad=12,innerW=CW-pad*2;
-    const sl=r.conflictBackground.historicalSummary?lines(r.conflictBackground.historicalSummary,9.5,innerW):[];
-    const players=r.conflictBackground.keyPlayers||[];const plLines=players.map(p=>lines('-  '+(p.name||'')+'  ('+(p.role||'')+')',9,innerW));
-    let plH=0;plLines.forEach(a=>plH+=a.length*lh(9));
-    const boxH=pad+sl.length*lh(9.5)+(players.length?10+plH:0)+pad-4;ensure(boxH+8);
-    fill(CARD);stroke(BORD);doc.setLineWidth(.7);doc.roundedRect(M,y,CW,boxH,8,8,'FD');
-    let ty=y+pad+6;doc.setFont('helvetica','normal');doc.setFontSize(9.5);setText(SUB);sl.forEach(ln=>{doc.text(ln,M+pad,ty);ty+=lh(9.5);});
-    if(players.length){ty+=6;doc.setFontSize(9);setText(MUT);plLines.forEach(a=>{a.forEach(ln=>{doc.text(ln,M+pad,ty);ty+=lh(9);});});}
-    y+=boxH+8;}
+  const fx=M+96,fw=CW-96;let fy=y+10;
+  factors.forEach(([label,val,col])=>{
+    doc.setFont('helvetica','normal');doc.setFontSize(8.6);setText(SUB);doc.text(label,fx,fy);
+    doc.setFont('helvetica','bold');setText(col);doc.text(val+'%',fx+fw,fy,{align:'right'});
+    const bgy=fy+5;fill(CARD2);doc.roundedRect(fx,bgy,fw,7,3.5,3.5,'F');
+    fill(col);doc.roundedRect(fx,bgy,Math.max(6,fw*val/100),7,3.5,3.5,'F');
+    fy+=26;
+  });
+  y+=ringBlockH+6;
 
-  /* AI Prediction — confidence bar + scenario boxes */
-  if(r.aiPrediction){header('Predictive Analysis');const ap=r.aiPrediction;
-    if(ap.primaryOutcome)paragraph(ap.primaryOutcome,11,TX,6,'bold');
-    const pct=ap.confidencePercent||0;const pCol=pct>=66?GREEN:pct>=33?AMBER:RED;ensure(26);
-    doc.setFont('helvetica','normal');doc.setFontSize(8.5);setText(MUT);doc.text('Confidence',M,y);doc.setFont('helvetica','bold');setText(pCol);doc.text(pct+'%',M+CW,y,{align:'right'});
-    const by=y+5;fill(CARD2);doc.roundedRect(M,by,CW,7,3,3,'F');fill(pCol);doc.roundedRect(M,by,Math.max(4,CW*pct/100),7,3,3,'F');y+=22;
-    if(Array.isArray(ap.alternativeScenarios)&&ap.alternativeScenarios.length){const pad=10,innerW=CW-pad*2-4;
-      ap.alternativeScenarios.forEach(s=>{const sl=lines(s.description||'',9,innerW);const boxH=pad+sl.length*lh(9)+pad-4;ensure(boxH+6);
-        fill(CARD2);doc.roundedRect(M,y,CW,boxH,7,7,'F');fill(ACC);doc.roundedRect(M,y,3,boxH,1.5,1.5,'F');
-        let ty=y+pad+4;doc.setFont('helvetica','normal');doc.setFontSize(9);setText(SUB);sl.forEach(ln=>{doc.text(ln,M+pad+4,ty);ty+=lh(9);});y+=boxH+6;});}
-    if(ap.disclaimer){y+=2;paragraph(ap.disclaimer,8,MUT,4,'italic');}}
+  /* Missing Facts */
+  if(Array.isArray(r.missingFacts)&&r.missingFacts.length){
+    header('Missing Facts','Context and details often absent from coverage of this subject');
+    const pad=14,badgeR=11,tw=CW-pad*2-badgeR*2-14;
+    r.missingFacts.forEach((f,i)=>{
+      const hl=lines(f.heading||'',10.5,tw);const dl=f.description?lines(f.description,9,tw):[];
+      const boxH=pad+hl.length*lh(10.5)+(dl.length?4+dl.length*lh(9):0)+pad-6;
+      ensure(boxH+10);
+      fill(CARD2);stroke(BORD);doc.setLineWidth(.6);doc.roundedRect(M,y,CW,boxH,9,9,'FD');
+      circleBadge(M+pad+badgeR,y+pad+badgeR-2,badgeR,i+1,ACC1);
+      let ty=y+pad+7;const tx=M+pad+badgeR*2+14;
+      doc.setFont('helvetica','bold');doc.setFontSize(10.5);setText(TX);hl.forEach(ln=>{doc.text(ln,tx,ty);ty+=lh(10.5);});
+      if(dl.length){ty+=2;doc.setFont('helvetica','normal');doc.setFontSize(9);setText(MUT);dl.forEach(ln=>{doc.text(ln,tx,ty);ty+=lh(9);});}
+      y+=boxH+10;
+    });
+  }
+
+  /* Conflict Background */
+  if(r.conflictBackground){
+    header('Context & Key Players','Background driving the story and the actors shaping it');
+    const pad=16,innerW=CW-pad*2;
+    const sl=r.conflictBackground.historicalSummary?lines(r.conflictBackground.historicalSummary,9.6,innerW):[];
+    const players=(r.conflictBackground.keyPlayers||[]);
+    const plLineArrs=players.map(p=>lines((p.role||''),8.6,innerW-14));
+    let plH=0;plLineArrs.forEach(a=>plH+=Math.max(1,a.length)*lh(8.6)+13);
+    const boxH=pad+sl.length*lh(9.6)+(players.length?16+plH:0)+pad-6;
+    ensure(boxH+10);
+    fill(CARD);stroke(BORD);doc.setLineWidth(.7);doc.roundedRect(M,y,CW,boxH,10,10,'FD');
+    fill(ACC1);doc.roundedRect(M,y,4,boxH,2,2,'F');
+    let ty=y+pad+4;doc.setFont('helvetica','normal');doc.setFontSize(9.6);setText(SUB);
+    sl.forEach(ln=>{doc.text(ln,M+pad+8,ty);ty+=lh(9.6);});
+    if(players.length){
+      ty+=10;stroke(BORD);doc.setLineWidth(.5);doc.line(M+pad+8,ty-8,M+CW-pad,ty-8);
+      players.forEach((p,i)=>{
+        fill(ACC1);doc.circle(M+pad+8+3,ty-2,3,'F');
+        doc.setFont('helvetica','bold');doc.setFontSize(9.3);setText(TX);doc.text(p.name||'',M+pad+18,ty);
+        const nameW=doc.getTextWidth(p.name||'');
+        doc.setFont('helvetica','normal');doc.setFontSize(8.6);setText(MUT);
+        const roleLines=plLineArrs[i];
+        if(roleLines.length){doc.text(roleLines[0],M+pad+18+nameW+8,ty);}
+        ty+=lh(8.6);
+        for(let k=1;k<roleLines.length;k++){doc.text(roleLines[k],M+pad+18,ty);ty+=lh(8.6);}
+        ty+=6;
+      });
+    }
+    y+=boxH+10;
+  }
+
+  /* Predictive Analysis */
+  if(r.aiPrediction){
+    header('Predictive Analysis','AI-modeled forecast with alternative scenarios');
+    const ap=r.aiPrediction;
+    if(ap.primaryOutcome)paragraph(ap.primaryOutcome,11.5,TX,8,'bold');
+    const pct=ap.confidencePercent||0;const pCol=pct>=66?GREEN:pct>=33?AMBER:RED;
+    ensure(30);
+    doc.setFont('helvetica','normal');doc.setFontSize(8.5);setText(MUT);doc.text('CONFIDENCE',M,y);
+    doc.setFont('helvetica','bold');setText(pCol);doc.text(pct+'%',M+CW,y,{align:'right'});
+    const by=y+6;fill(CARD2);doc.roundedRect(M,by,CW,8,4,4,'F');
+    fill(pCol);doc.roundedRect(M,by,Math.max(6,CW*pct/100),8,4,4,'F');
+    y+=26;
+    if(Array.isArray(ap.alternativeScenarios)&&ap.alternativeScenarios.length){
+      ensure(16);doc.setFont('helvetica','bold');doc.setFontSize(9);setText(MUT);doc.text('ALTERNATIVE SCENARIOS',M,y);y+=14;
+      const pad=12,innerW=CW-pad*2-6;
+      ap.alternativeScenarios.forEach((s,i)=>{
+        const sl=lines(s.description||'',9,innerW);const boxH=pad+sl.length*lh(9)+pad-4;
+        ensure(boxH+8);
+        fill(CARD2);doc.roundedRect(M,y,CW,boxH,8,8,'F');
+        fill(ACC1);doc.roundedRect(M,y,3.5,boxH,1.75,1.75,'F');
+        doc.setFont('helvetica','bold');doc.setFontSize(8);setText(ACC);doc.text('0'+(i+1),M+pad+2,y+pad+2);
+        let ty=y+pad+2;doc.setFont('helvetica','normal');doc.setFontSize(9);setText(SUB);
+        sl.forEach(ln=>{doc.text(ln,M+pad+22,ty);ty+=lh(9);});
+        y+=boxH+8;
+      });
+    }
+    if(ap.disclaimer){y+=4;paragraph(ap.disclaimer,7.8,MUT,4,'italic');}
+  }
 
   footerLine();
 
   /* ===== PAGE NUMBERS (content pages only; cover stays unnumbered) ===== */
   const totalPages=doc.internal.getNumberOfPages();
-  for(let p=2;p<=totalPages;p++){doc.setPage(p);doc.setFont('helvetica','normal');doc.setFontSize(8);setText(MUT);doc.text('Page '+(p-1)+' of '+(totalPages-1),PW/2,PH-20,{align:'center'});}
+  for(let p=2;p<=totalPages;p++){
+    doc.setPage(p);
+    doc.setFont('helvetica','normal');doc.setFontSize(8);setText(MUT);
+    doc.text('Page '+(p-1)+' of '+(totalPages-1),PW/2,PH-19.5,{align:'center'});
+  }
 
   doc.save('clearlens-report-'+Date.now()+'.pdf');
 }

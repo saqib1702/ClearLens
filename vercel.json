@@ -1,7 +1,7 @@
 {
-  "rewrites": [
-    { "source": "/api/analyze", "destination": "/api/analyze.js" },
-    { "source": "/api/news", "destination": "/api/news.js" },
-    { "source": "/api/fetch-url", "destination": "/api/fetch-url.js" }
-  ]
+  "functions": {
+    "api/analyze.js": { "maxDuration": 30 },
+    "api/fetch-url.js": { "maxDuration": 30 },
+    "api/news.js": { "maxDuration": 15 }
+  }
 }
